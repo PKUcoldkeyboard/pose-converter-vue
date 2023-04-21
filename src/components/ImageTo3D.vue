@@ -18,8 +18,9 @@
                 </div>
             </div>
             <div class="buttons-container">
-                <a-button type="primary" class="process-button" @click="processImage">确定</a-button>
-                <a-button class="save-button" @click="saveResult">保存</a-button>
+                <a-button type="primary" class="process-button" @click="processImage">开始转换</a-button>
+                <a-button class="save-button" @click="saveResult">保存骨架姿态图片</a-button>
+                <a-button class="save-button" @click="saveResult">保存骨架姿态模型</a-button>
             </div>
 
             <div class="image-to-3d-process" v-if="processing">

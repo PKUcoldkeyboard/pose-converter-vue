@@ -7,6 +7,21 @@
         <a-button type="primary" @click="selectVideo">选择视频</a-button>
         <p class="file-upload-note">请上传mp4格式的视频文件。根据文件大小，转换过程可能需要一些时间。</p>
       </div>
+      <div class="video-preview">
+              <div class="uploaded-video">
+                  <!-- <img :src="uploadedImageSrc" v-if="uploadedImageSrc" /> -->
+                  <p>显示视频</p>
+              </div>
+              <div class="generated-video">
+                  <!-- <img :src="generatedImageSrc" v-if="generatedImageSrc" /> -->
+                  <p>显示骨架</p>
+              </div>
+            </div>
+            <div class="buttons-container">
+                <a-button type="primary" class="process-button">开始转换</a-button>
+                <a-button class="save-button" @click="saveResult">保存骨架姿态视频</a-button>
+                <a-button class="save-button" @click="saveResult">保存骨架姿态模型</a-button>
+            </div>
       <div class="video-to-3d-process" v-if="processing">
         <a-spin size="large" />
         <p>正在处理视频，请稍候...</p>
@@ -47,11 +62,19 @@ export default defineComponent({
       }, 3000);
     };
 
+    const saveResult = async () => {
+            // 保存生成的图片
+            // 实际实现时，需要调用后端接口处理文件
+            alert('保存成功');
+        };
+    
+
     return {
       videoInput,
       processing,
       selectVideo,
       uploadVideo,
+      saveResult
     };
   },
 });
@@ -98,5 +121,46 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.video-preview {
+    margin-top: 24px;
+    display: flex;
+    justify-content: space-between;
+    background-color: #fff;
+    padding: 24px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.uploaded-video,
+.generated-video {
+    width: 45%;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+}
+
+.uploaded-image img,
+.generated-image img {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.buttons-container {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 24px;
+    width: 100%;
+}
+
+.process-button,
+.save-button {
+    margin-left: 8px;
 }
 </style>

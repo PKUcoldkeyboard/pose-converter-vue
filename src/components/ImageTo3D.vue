@@ -5,7 +5,7 @@
             <div class="file-upload">
                 <input type="file" ref="imageInput" @change="previewImage" accept=".png" style="display: none" />
                 <a-button type="primary" @click="selectImage">选择图片</a-button>
-                <p class="file-upload-note">请上传png格式的图片文件。根据文件大小，转换过程可能需要一些时间。</p>
+                <p class="file-upload-note">请上传png格式的图片文件。根据文件大小，转换过程可能需要一些时间。点击开始转换后会自动存储相应文件到文件管理模块中。</p>
             </div>
             <div class="image-preview">
                 <div class="uploaded-image">
@@ -19,8 +19,6 @@
             </div>
             <div class="buttons-container">
                 <a-button type="primary" class="process-button" @click="processImage">开始转换</a-button>
-                <a-button class="save-button" @click="saveResult">保存骨架姿态图片</a-button>
-                <a-button class="save-button" @click="saveResult">保存骨架姿态模型</a-button>
             </div>
 
             <div class="image-to-3d-process" v-if="processing">

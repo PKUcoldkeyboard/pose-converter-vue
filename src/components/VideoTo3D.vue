@@ -5,7 +5,7 @@
       <div class="file-upload">
         <input type="file" ref="videoInput" @change="uploadVideo" accept=".mp4" style="display: none" />
         <a-button type="primary" @click="selectVideo">选择视频</a-button>
-        <p class="file-upload-note">请上传mp4格式的视频文件。根据文件大小，转换过程可能需要一些时间。</p>
+        <p class="file-upload-note">请上传mp4格式的视频文件。根据文件大小，转换过程可能需要一些时间。点击开始转换后会自动存储相应文件到文件管理模块中。</p>
       </div>
       <div class="video-preview">
               <div class="uploaded-video">
@@ -19,8 +19,6 @@
             </div>
             <div class="buttons-container">
                 <a-button type="primary" class="process-button">开始转换</a-button>
-                <a-button class="save-button" @click="saveResult">保存骨架姿态视频</a-button>
-                <a-button class="save-button" @click="saveResult">保存骨架姿态模型</a-button>
             </div>
       <div class="video-to-3d-process" v-if="processing">
         <a-spin size="large" />

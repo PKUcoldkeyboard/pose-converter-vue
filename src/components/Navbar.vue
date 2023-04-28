@@ -21,8 +21,9 @@
         </ul>
       </nav>
       <div class="auth-buttons">
-        <a-button type="link" class="login-button" @click="goToLogin">登录</a-button>
-        <a-button type="primary" shape="round" class="register-button" @click="goToRegister">注册</a-button>
+        <a-button type="primary" shape="round" class="register-button" :disabled="isLoggedIn">{{ isLoggedIn ? `Username: ${username}` : '未登录' }}</a-button>
+        <a-button v-if="!isLoggedIn" type="link" class="login-button" @click="goToLogin">登录</a-button>
+        <a-button v-if="!isLoggedIn" type="primary" shape="round" class="register-button" @click="goToRegister">注册</a-button>
       </div>
     </div>
   </div>
@@ -30,7 +31,11 @@
 
 <script>
 import { defineComponent } from 'vue';
+import { mapGetters } from 'vuex';
 export default defineComponent ({
+  computed: {
+    ...mapGetters(['isLoggedIn', 'username'])
+  },
   methods: {
     goToRegister() {
       this.$router.push('/register');

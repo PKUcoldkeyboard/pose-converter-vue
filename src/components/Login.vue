@@ -2,20 +2,24 @@
   <div class="login-page">
     <div class="login-container">
       <h1 class="login-title">登录</h1>
-      <a-form @submit="handleSubmit" class="login-form">
+      <a-form 
+        :model = "formState"
+        @finish="onFinish"
+        @submit="handleLogin" 
+        class="login-form">
         <a-form-item>
-          <a-input v-model="username" placeholder="用户名">
+          <a-input v-model:value="formState.username" placeholder="用户名">
             <template #prefix>
-              <user-outlined type="user" style="color: rgba(0, 0, 0, 0.45)" />
+              <user-outlined style="color: rgba(0, 0, 0, 0.45)" />
             </template>
           </a-input>
         </a-form-item>
-        <a-form-item>
-          <a-input v-model="password" type="password" placeholder="密码">
+        <a-form-item :rules="[{required:true, trigger:'blur', validator:validatePassword}]">
+          <a-input-password v-model:value="formState.password" placeholder="密码">
             <template #prefix>
               <lock-filled style="color: rgba(0, 0, 0, 0.45)" />
             </template>
-          </a-input>
+          </a-input-password>
         </a-form-item>
         <a-form-item>
           <a-button type="primary" html-type="submit" class="login-button">
@@ -23,7 +27,7 @@
           </a-button>
           <div class="bottom-actions">
             <div class="bottom-actions-container">
-              <a-checkbox v-model="rememberMe">记住密码</a-checkbox>
+              <a-checkbox v-model:value="formState.rememberMe">记住密码</a-checkbox>
               <a-button type="dashed" @click="goToRegister">立即注册</a-button>
               <router-link to="/find-pwd">找回密码</router-link>
             </div>
@@ -39,7 +43,11 @@ import {
   UserOutlined,
   LockFilled,
 } from '@ant-design/icons-vue';
-import { defineComponent } from 'vue';
+import { defineComponent, reactive } from 'vue';
+import { validUsername, validPassword } from '@/utils/validate';
+import { setCookie, getCookie } from '@/utils/support';
+import { useStore } from 'vuex';
+import { useRouter } from 'vue-router';
 
 export default defineComponent({
   components: {
@@ -47,22 +55,58 @@ export default defineComponent({
     LockFilled,
   },
 
-  data() {
-    return {
+  setup() {
+    const store = useStore();
+    const router = useRouter();
+    const formState = reactive({
       username: '',
       password: '',
       rememberMe: false,
+    });
+    const validateUsername = (value, callback) => {
+      if (!validUsername(value)) {
+        callback(new Error('请输入正确的用户名'));
+      } else {
+        callback();
+      }
     };
-  },
-  methods: {
-    handleSubmit(e) {
-      e.preventDefault();
-      // 提交登录表单
-    },
-    goToRegister() {
-      this.$router.push('/register');
-    },
-  },
+
+    const validatePassword = (value, callback) => {
+      if (!validPassword(value)) {
+        callback(new Error('密码为同时含有大小写字母、数字的8-16位组合'));
+      } else {
+        callback();
+      }
+    };
+
+    const goToRegister = () => {
+      router.push('/register');
+    };
+
+    const onFinish = () => {
+      router.push('/');
+    };
+
+    const handleLogin = () => {
+      store.dispatch('Login', {
+        username: formState.username,
+        password: formState.password,
+        rememberMe: formState.rememberMe,
+        })
+        .then(() => {
+          router.push('/');
+        })
+    };
+
+    return {
+      formState,
+      validateUsername,
+      validatePassword,
+      goToRegister,
+      onFinish,
+      handleLogin,
+    };
+  }
 });
 </script>
 

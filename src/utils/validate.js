@@ -1,3 +1,4 @@
+
 /**
  * 邮箱格式验证
  */
@@ -23,8 +24,8 @@ export function validPassword(password) {
 }
 
 /**
- * 用户名必须在4位以上
+ * 用户名必须在4位以上，10位以下
  */
 export function validUsername(str) {
-    return str.trim().length >= 4
+    return str.length >= 4 && str.length <= 10
 }

@@ -1,8 +1,12 @@
-import { post } from "@/utils/request";
+import api from "@/utils/request";
 
 export function login(username, password) {
-    return post("/login", {
-        "username": username,
-        "password": password
+    return api({
+        url: "/login",
+        method: "post",
+        data: {
+            "username": username,
+            "password": password
+        }
     });
 }

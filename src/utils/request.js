@@ -3,12 +3,12 @@ import store from '@/store';
 import { getToken } from './auth';
 import {message, Modal} from 'ant-design-vue';
 
-const baseURL = 'https://localhost:8058/api'; // API 接口地址
+const baseURL = 'http://localhost:8058/api'; // API 接口地址
 
 const api = axios.create({
   baseURL,
   withCredentials: true, // 允许跨域携带 cookie
-  timeout: 15000,
+  timeout: 30000,
 });
 
 api.interceptors.request.use(config => {
@@ -24,11 +24,8 @@ api.interceptors.request.use(config => {
 api.interceptors.response.use(
   response => {
     const res = response.data;
-    if (res.code !== 200) {
-      message.error({
-        content: res.message,
-        duration: 3
-      });
+    if (res.code != 200) {
+      message.error(res.msg);
       // 401: 未登录
       if (res.code == 401) {
         Modal.confirm({
@@ -48,55 +45,9 @@ api.interceptors.response.use(
     }
   },
   error => {
-    message.error({
-      content: error.message,
-      duration: 3,
-    })
+    message.error(error.message)
     return Promise.reject(error);
   }
 )
-
-// 封装 GET 请求方法
-export const get = async (url, params = {}) => {
-  try {
-    const response = await api.get(url, { params });
-    return response.data;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
-
-// 封装 POST 请求方法
-export const post = async (url, data = {}) => {
-  try {
-    const response = await api.post(url, data);
-    return response.data;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
-
-// 封装 Put 请求方法
-export const put = async (url, data = {}) => {
-  try {
-    const response = await api.put(url, data);
-    return response.data;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
-
-export const del = async (url, data = {}) => {
-  try {
-    const response = await api.delete(url, data);
-    return response.data;
-  } catch (error) {
-    console.error(error);
-    throw error;
-  }
-};
 
 export default api;

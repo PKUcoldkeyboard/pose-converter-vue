@@ -31,11 +31,13 @@ const store = createStore({
             const token = "Bearer " + data.token;
             setToken(token);
             commit('SET_TOKEN', token);
-            resolve();
+            commit('SET_USERNAME', username);
+            commit("SET_USER_ID", data.userId);
+            resolve('/');
           }).catch(error => {
             reject(error);
           })
-      })
+       })
     },
     // 前端登出
     FedLogout({ commit }) {
@@ -49,7 +51,7 @@ const store = createStore({
   getters: {
     // 在这里定义你的状态获取函数
     isLoggedin: state => {
-      return state.token !== '';
+      return state.token != '';
     },
     username: state => {
       return state.username;
@@ -57,7 +59,7 @@ const store = createStore({
     userId: state => {
       return state.userId;
     }
-  }
+  },
 });
 
 export default store;

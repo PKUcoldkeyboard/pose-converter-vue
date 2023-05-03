@@ -1,12 +1,13 @@
-import { createRouter, createWebHistory } from "vue-router";
-import Index from "../components/Index.vue";
-import Login from "../components/Login.vue";
-import Register from "../components/Register.vue";
-import VideoTo3D from "../components/VideoTo3D.vue";
-import ImageTo3D from "../components/ImageTo3D.vue";
-import Forum from "../components/Forum.vue";
-import FileManager from "../components/FileManager.vue";
-import FindPass from "@/components/FindPass.vue";
+import { createRouter, createWebHashHistory } from "vue-router";
+
+const Index = () => import("../components/Index.vue");
+const Login = () => import("../components/Login.vue");
+const Register = () => import("../components/Register.vue");
+const VideoTo3D = () => import("../components/VideoTo3D.vue");
+const ImageTo3D = () => import("../components/ImageTo3D.vue");
+const Forum = () => import("../components/Forum.vue");
+const FileManager = () => import("../components/FileManager.vue");
+const FindPass = () => import("@/components/FindPass.vue");
 
 const routes = [
   { path: "/", component: Index },
@@ -20,7 +21,7 @@ const routes = [
 ];
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes
 });
 

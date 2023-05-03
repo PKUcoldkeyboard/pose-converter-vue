@@ -1,32 +1,50 @@
-import { del, get, post, put } from "@/utils/request";
+import api from "@/utils/request";
 
 export function getPostById(id) {
-    return get("/post/" + id);
+    return api({
+        url: "/post/" + id,
+        method: "get"
+    });
 }
 
 export function getPostList(page, size) {
-    return get("/post", {
-        "pageNum": page,
-        "pageSize": size
+    return api({
+        url: "/post",
+        method: "get",
+        params: {
+            "pageNum": page,
+            "pageSize": size
+        }
     });
 }
 
 export function createPost(title, content, userId) {
-    return post("/post", {
-        "title": title,
-        "content": content,
-        "userId": userId
+    return api({
+        url: "/post",
+        method: "post",
+        data: {
+            "title": title,
+            "content": content,
+            "userId": userId
+        }
     });
 }
 
 export function updatePost(id, title, content) {
-    return put("/post/" + id, {
-        "title": title,
-        "content": content,
+    return api({
+        url: "/post/" + id,
+        method: "put",
+        data: {
+            "title": title,
+            "content": content,
+        }
     });
 }
 
 export function deletePost(id) {
-    return del("/post/" + id);
+    return api({
+        url: "/post/" + id,
+        method: "delete"
+    });
 }
 

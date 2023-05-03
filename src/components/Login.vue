@@ -3,18 +3,18 @@
     <div class="login-container">
       <h1 class="login-title">登录</h1>
       <a-form 
-        :model = "formState"
-        @finish="onFinish"
-        @submit="handleLogin" 
+        ref="formRef"
+        :model="formState"
+        :rules="rules"
         class="login-form">
-        <a-form-item>
+        <a-form-item has-feedback name="username">
           <a-input v-model:value="formState.username" placeholder="用户名">
             <template #prefix>
               <user-outlined style="color: rgba(0, 0, 0, 0.45)" />
             </template>
           </a-input>
         </a-form-item>
-        <a-form-item :rules="[{required:true, trigger:'blur', validator:validatePassword}]">
+        <a-form-item has-feedback name="password">
           <a-input-password v-model:value="formState.password" placeholder="密码">
             <template #prefix>
               <lock-filled style="color: rgba(0, 0, 0, 0.45)" />
@@ -22,12 +22,12 @@
           </a-input-password>
         </a-form-item>
         <a-form-item>
-          <a-button type="primary" html-type="submit" class="login-button">
+          <a-button type="primary" :loading="formState.loading" @click.native.prevent="handleFinish" class="login-button">
             登录
           </a-button>
           <div class="bottom-actions">
             <div class="bottom-actions-container">
-              <a-checkbox v-model:value="formState.rememberMe">记住密码</a-checkbox>
+              <a-checkbox v-model:checked="formState.rememberMe">记住密码</a-checkbox>
               <a-button type="dashed" @click="goToRegister">立即注册</a-button>
               <router-link to="/find-pwd">找回密码</router-link>
             </div>
@@ -43,9 +43,8 @@ import {
   UserOutlined,
   LockFilled,
 } from '@ant-design/icons-vue';
-import { defineComponent, reactive } from 'vue';
+import { defineComponent, reactive, ref } from 'vue';
 import { validUsername, validPassword } from '@/utils/validate';
-import { setCookie, getCookie } from '@/utils/support';
 import { useStore } from 'vuex';
 import { useRouter } from 'vue-router';
 
@@ -56,56 +55,108 @@ export default defineComponent({
   },
 
   setup() {
-    const store = useStore();
-    const router = useRouter();
+    const formRef = ref();
     const formState = reactive({
       username: '',
       password: '',
       rememberMe: false,
+      loading: false,
     });
-    const validateUsername = (value, callback) => {
-      if (!validUsername(value)) {
-        callback(new Error('请输入正确的用户名'));
-      } else {
-        callback();
+
+    const store = useStore();
+    const router = useRouter();
+
+    let validateUsername = async (_rule, value) => {
+      if (value == '') {
+        return Promise.reject("请输入用户名");
       }
+      if (validUsername(value)) {
+        return Promise.resolve();
+      }
+      return Promise.reject("用户名长度为4至10位")
     };
 
-    const validatePassword = (value, callback) => {
-      if (!validPassword(value)) {
-        callback(new Error('密码为同时含有大小写字母、数字的8-16位组合'));
-      } else {
-        callback();
+    let validatePass = async (_rule, value) => {
+      if (value == '') {
+        return Promise.reject("请输入密码");
       }
+      if (validPassword(value)) {
+        return Promise.resolve();
+      }
+      return Promise.reject("密码为8-16位字符，且必须同时含有大小写字母、数字");
+    };
+
+    const rules = {
+      username: [{
+        required: true,
+        validator: validateUsername,
+        trigger: 'blur',
+      }],
+      password: [{
+        required: true,
+        validator: validatePass,
+        trigger: 'blur',
+      }]
+    };
+
+    const handleFinish = values => {
+      formState.loading = true;
+      let payload = {
+        username: formState.username,
+        password: formState.password,
+      };
+      store.dispatch('Login', payload).then(()=> {
+        formState.loading = false;
+        if (formState.rememberMe) {
+          localStorage.setItem("username", formState.username);
+          localStorage.setItem("password", formState.password);
+        } else {
+          sessionStorage.setItem("username", formState.username);
+          sessionStorage.setItem("password", formState.password);
+        }
+        router.push('/video-to-3d');
+      }).catch((error) => {
+        formState.loading = false;
+        console.error(error);
+      })
+    };
+
+    const handleFinishFailed = errors => {
+      console.log(errors);
     };
 
     const goToRegister = () => {
-      router.push('/register');
-    };
-
-    const onFinish = () => {
-      router.push('/');
-    };
-
-    const handleLogin = () => {
-      store.dispatch('Login', {
-        username: formState.username,
-        password: formState.password,
-        rememberMe: formState.rememberMe,
-        })
-        .then(() => {
-          router.push('/');
-        })
-    };
-
+      if (formState.rememberMe) {
+          localStorage.setItem("username", formState.username);
+          localStorage.setItem("password", formState.password);
+      } else {
+        sessionStorage.setItem("username", formState.username);
+        sessionStorage.setItem("password", formState.password);
+      }
+      router.push('/register')
+    }
+    
     return {
       formState,
-      validateUsername,
-      validatePassword,
-      goToRegister,
-      onFinish,
-      handleLogin,
-    };
+      formRef,
+      rules,
+      handleFinish,
+      handleFinishFailed,
+      goToRegister
+    }
+  },
+
+  created() {
+    const username = localStorage.getItem('username') || sessionStorage.getItem('username');
+    const password = localStorage.getItem('password') || sessionStorage.getItem('password');
+
+    if (username) {
+      this.formState.username = username;
+      this.formState.rememberMe = true;
+    }
+    if (password) {
+      this.formState.password = password;
+    }
   }
 });
 </script>
@@ -175,5 +226,6 @@ export default defineComponent({
 .bottom-actions-container router-link {
   margin: 0 8px;
 }
+
 </style>
 

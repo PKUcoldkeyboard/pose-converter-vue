@@ -1,13 +1,14 @@
+import Cookies from 'js-cookie'
 const TokenKey = 'sa-token'
 
 export function getToken() {
-	return this.$cookies.get(TokenKey);
+	return Cookies.get(TokenKey);
 }
 
 export function setToken(token){
-	return this.$cookies.set(TokenKey, token, {expires:30});
+	return Cookies.set(TokenKey, token, {expires:30});
 }
 
 export function removeToken(){
-	this.$cookies.remove(TokenKey);
+	Cookies.remove(TokenKey);
 }

@@ -21,9 +21,10 @@
         </ul>
       </nav>
       <div class="auth-buttons">
-        <a-button type="primary" shape="round" class="register-button" :disabled="isLoggedIn">{{ isLoggedIn ? `Username: ${username}` : '未登录' }}</a-button>
-        <a-button v-if="!isLoggedIn" type="link" class="login-button" @click="goToLogin">登录</a-button>
-        <a-button v-if="!isLoggedIn" type="primary" shape="round" class="register-button" @click="goToRegister">注册</a-button>
+        <a-button v-if="isLoggedin" type="link" shape="round" class="login-button">{{ isLoggedin ?  `${username}` : '' }}</a-button>
+        <a-button v-if="isLoggedin" type="primary" class="register-button" @click="logout">登出</a-button>
+        <a-button v-if="!isLoggedin" type="link" class="login-button" @click="goToLogin">登录</a-button>
+        <a-button v-if="!isLoggedin" type="primary" shape="round" class="register-button" @click="goToRegister">注册</a-button>
       </div>
     </div>
   </div>
@@ -31,19 +32,50 @@
 
 <script>
 import { defineComponent } from 'vue';
-import { mapGetters } from 'vuex';
+import { useRouter } from 'vue-router';
+import { mapGetters, useStore } from 'vuex';
+
 export default defineComponent ({
   computed: {
-    ...mapGetters(['isLoggedIn', 'username'])
+    ...mapGetters(['isLoggedin', 'username'])
   },
-  methods: {
-    goToRegister() {
-      this.$router.push('/register');
-    },
-    goToLogin() {
-      this.$router.push('/login');
-    },
-  }
+  created() {
+    const store = useStore();
+    if (sessionStorage.getItem('store')) {
+      store.replaceState(Object.assign({}, store.state, JSON.parse(sessionStorage.getItem('store'))))
+    }
+
+    // 页面刷新时将vuex里的信息保存到sessionStorage里
+    window.addEventListener('beforeunload', () => {
+      sessionStorage.setItem('store', JSON.stringify(store.state))
+    })
+  },
+  setup() {
+    const router = useRouter();
+    const store = useStore();
+
+    const goToRegister = () => {
+      router.push('/register');
+    };
+
+    const goToLogin = () => {
+      router.push('/login');
+    };
+
+    const logout = () => {
+      store.dispatch('FedLogout').then(() => {
+        router.push('/login');
+      }).catch(error => {
+        console.log(error);
+      })
+    }
+
+    return {
+      goToRegister,
+      goToLogin,
+      logout,
+    };
+  },
 });
 </script>
 

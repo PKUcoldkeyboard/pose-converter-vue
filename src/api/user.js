@@ -1,14 +1,29 @@
-import { post, put } from "@/utils/request";
+import api from "@/utils/request";
 
 export function register(username, password) {
-    return post("/user", {
-        "username": username,
-        "password": password
-    });
+    return api({
+        url: "/register",
+        method: "post",
+        data: {
+            "username": username,
+            "password": password
+        }
+    })
 }
 
 export function update(id, password) {
-    return put("/user/" + id, {
-        "password": password
-    });
+    return api({
+        url: "/user/" + id,
+        method: "put",
+        data: {
+            "password": password
+        }
+    })
+}
+
+export function getUserList() {
+    return api({
+        url: "/user/",
+        method: "get"
+    })
 }

@@ -13,9 +13,7 @@ const api = axios.create({
 
 api.interceptors.request.use(config => {
   // 携带JWT请求头
-  if (store.getters.token) {
-    config.headers['sa-token'] = getToken();
-  }
+  config.headers['sa-token'] = localStorage.getItem('token') || '';
   return config;
 }, error => {
   Promise.reject(error);

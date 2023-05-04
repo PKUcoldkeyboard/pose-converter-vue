@@ -3,22 +3,27 @@
     <div class="container">
       <h1 class="video-to-3d-title">视频转3D</h1>
       <div class="file-upload">
-        <input type="file" ref="videoInput" @change="uploadVideo" accept=".mp4" style="display: none" />
-        <a-button type="primary" @click="selectVideo">选择视频</a-button>
+        <a-upload :file-list="fileList"
+                          :showUploadList="false"
+                          :before-upload="beforeUpload">
+                    <a-button><upload-outlined />选择视频</a-button>
+        </a-upload>
         <p class="file-upload-note">请上传mp4格式的视频文件。根据文件大小，转换过程可能需要一些时间。点击开始转换后会自动存储相应文件到文件管理模块中。</p>
       </div>
       <div class="video-preview">
               <div class="uploaded-video">
+                  <video :src="uploadedVideoSrc" v-if="uploadedVideoSrc" controls autoplay loop style="width:100%;height:100%;"></video>
                   <!-- <img :src="uploadedImageSrc" v-if="uploadedImageSrc" /> -->
-                  <p>显示视频</p>
+                  <p v-else>显示视频</p>
               </div>
               <div class="generated-video">
+                  <video :src="generatedVideoSrc" v-if="generatedVideoSrc" controls autoplay loop style="width:100%;height:100%;"></video>
                   <!-- <img :src="generatedImageSrc" v-if="generatedImageSrc" /> -->
-                  <p>显示骨架</p>
+                  <p v-else>显示骨架</p>
               </div>
             </div>
             <div class="buttons-container">
-                <a-button type="primary" class="process-button">开始转换</a-button>
+                <a-button type="primary" class="process-button" @click.native.prevent="handleConvert">开始转换</a-button>
             </div>
       <div class="video-to-3d-process" v-if="processing">
         <a-spin size="large" />
@@ -29,50 +34,68 @@
 </template>
 
 <script>
-import { defineComponent, ref } from 'vue';
+import { convert } from '@/api/video';
+import { uploadFile } from '@/api/minio';
+import { UploadOutlined } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
+import { computed, defineComponent, ref } from 'vue';
+import { useStore } from 'vuex';
 
 export default defineComponent({
+  components: {
+    UploadOutlined
+  },
   setup() {
-    const videoInput = ref(null);
     const processing = ref(false);
+    const fileList = ref([]);
+    const uploadedVideoSrc = ref('');
+    const generatedVideoSrc = ref('');
 
-    const selectVideo = () => {
-      videoInput.value.click();
-    };
+    const store = useStore();
 
-    const uploadVideo = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      // 验证文件类型
-      if (file.type !== 'video/mp4') {
-        alert('请上传MP4格式的视频文件');
-        return;
+    const beforeUpload = async(file) => {
+      const isMp4 = file.type === 'video/mp4';
+      if (!isMp4) {
+        message.error('请上传mp4格式的视频文件');
       }
-
-      processing.value = true;
-
-      // 上传文件并转换为3D姿态
-      // 实际实现时，需要调用后端接口处理文件
-      setTimeout(() => {
-        processing.value = false;
-        alert('视频处理完成');
-      }, 3000);
+      // 上传视频
+      try {
+          const response = await uploadFile(username.value, file);
+          const uploadedFile = new File([file], response.data, { type: file.type });
+          fileList.value.push(uploadedFile);
+          uploadedVideoSrc.value = response.data;
+          message.success("上传成功");
+      } catch (error) {
+          console.log(error);
+          message.error("上传失败");
+          return false;
+      }
+      return false;
     };
 
-    const saveResult = async () => {
-            // 保存生成的图片
-            // 实际实现时，需要调用后端接口处理文件
-            alert('保存成功');
-        };
-    
+    const handleConvert = async() => {
+      processing.value = true;
+      try {
+        const response = await convert(username.value, uploadedVideoSrc.value);
+        generatedVideoSrc.value = "http://" + response.data.video_path;
+        message.success("转换成功");
+      } catch (error) {
+        console.log(error);
+        message.error("转换失败");
+      }
+      processing.value = false;
+    };
+
+    const username = computed(() => store.getters.username);
 
     return {
-      videoInput,
       processing,
-      selectVideo,
-      uploadVideo,
-      saveResult
+      fileList,
+      beforeUpload,
+      username,
+      uploadedVideoSrc,
+      generatedVideoSrc,
+      handleConvert
     };
   },
 });

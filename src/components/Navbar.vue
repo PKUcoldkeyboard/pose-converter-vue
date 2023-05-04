@@ -39,17 +39,7 @@ export default defineComponent ({
   computed: {
     ...mapGetters(['isLoggedin', 'username'])
   },
-  created() {
-    const store = useStore();
-    if (sessionStorage.getItem('store')) {
-      store.replaceState(Object.assign({}, store.state, JSON.parse(sessionStorage.getItem('store'))))
-    }
-
-    // 页面刷新时将vuex里的信息保存到sessionStorage里
-    window.addEventListener('beforeunload', () => {
-      sessionStorage.setItem('store', JSON.stringify(store.state))
-    })
-  },
+  
   setup() {
     const router = useRouter();
     const store = useStore();

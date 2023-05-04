@@ -2,37 +2,37 @@
   <div class="register-page">
     <div class="register-container">
       <h1 class="register-title">注册</h1>
-      <a-form @submit="handleSubmit" class="register-form">
-        <a-form-item>
-          <a-input v-model="username" placeholder="用户名">
+      <a-form ref="formRef" :model="formState" :rules="rules" @finish="handleRegister" class="register-form">
+        <a-form-item has-feedback name="username">
+          <a-input v-model:value="formState.username" placeholder="用户名">
             <template #prefix>
-              <user-outlined type="user" style="color: rgba(0, 0, 0, 0.45)" />
+              <user-outlined style="color: rgba(0, 0, 0, 0.45)" />
             </template>
           </a-input>
         </a-form-item>
-        <a-form-item>
-          <a-input v-model="email" placeholder="邮箱">
+        <a-form-item has-feedback name="email">
+          <a-input v-model:value="formState.email" placeholder="邮箱">
             <template #prefix>
               <mail-outlined style="color: rgba(0, 0, 0, 0.45)" />
             </template>
           </a-input>
         </a-form-item>
-        <a-form-item>
-          <a-input v-model="password" type="password" placeholder="密码">
+        <a-form-item has-feedback name="password">
+          <a-input-password v-model:value="formState.password" placeholder="密码">
             <template #prefix>
               <lock-filled style="color: rgba(0, 0, 0, 0.45)" />
             </template>
-          </a-input>
+          </a-input-password>
         </a-form-item>
-        <a-form-item>
-          <a-input v-model="confirmPassword" type="password" placeholder="确认密码">
+        <a-form-item has-feedback name="confirmPass">
+          <a-input-password v-model:value="formState.confirmPass" placeholder="确认密码">
             <template #prefix>
               <lock-filled style="color: rgba(0, 0, 0, 0.45)" />
             </template>
-          </a-input>
+          </a-input-password>
         </a-form-item>
         <a-form-item>
-          <a-button type="primary" html-type="submit" class="register-button">
+          <a-button type="primary" :loading="formState.loading" html-type="submit" class="register-button">
             注册
           </a-button>
           <div class="bottom-actions">
@@ -47,8 +47,11 @@
 </template>
 
 <script>
+import { register } from '@/api/user';
+import { validEmail, validPassword, validUsername } from '@/utils/validate';
 import { UserOutlined, LockFilled, MailOutlined } from '@ant-design/icons-vue';
-import { defineComponent } from 'vue';
+import { defineComponent, reactive, ref } from 'vue';
+import { useRouter } from 'vue-router';
 
 export default defineComponent({
   components: {
@@ -57,20 +60,99 @@ export default defineComponent({
     MailOutlined,
   },
 
-  data() {
-    return {
+  setup() {
+    const formRef = ref();
+    const formState = reactive({
       username: '',
       email: '',
       password: '',
-      confirmPassword: '',
+      confirmPass: '',
+      loading: false,
+    });
+
+    const router = useRouter();
+
+    let validateUsername = async (_rule, value) => {
+      if (value == '') {
+        return Promise.reject("请输入用户名");
+      }
+      if (validUsername(value)) {
+        return Promise.resolve();
+      }
+      return Promise.reject("用户名长度为4至10位")
     };
-  },
-  methods: {
-    handleSubmit(e) {
-      e.preventDefault();
-      // 提交注册表单
-    },
-  },
+
+    let validatePass = async (_rule, value) => {
+      if (value == '') {
+        return Promise.reject("请输入密码");
+      }
+      if (validPassword(value)) {
+        return Promise.resolve();
+      }
+      return Promise.reject("密码为8-16位字符，且必须同时含有大小写字母、数字");
+    };
+
+    let validateConfirmPass = async (_rule, value) => {
+      if (value == '') {
+        return Promise.reject("请再次输入密码");
+      }
+      if (value === formState.password) {
+        return Promise.resolve();
+      }
+      return Promise.reject("两次输入密码不一致");
+    };
+
+    let validateEmail = async (_rule, value) => {
+      if (value == '') {
+        return Promise.reject("请输入邮箱");
+      }
+      if (validEmail(value)) {
+        return Promise.resolve();
+      }
+      return Promise.reject("请输入正确的邮箱");
+    };
+
+    const rules = {
+      username: [{
+        required: true,
+        validator: validateUsername,
+        trigger: 'blur'
+      }],
+      password: [{
+        required: true,
+        validator: validatePass,
+        trigger: 'blur'
+      }],
+      confirmPass: [{
+        required: true,
+        validator: validateConfirmPass,
+        trigger: 'blur'
+      }], email: [{
+        required: true,
+        validator: validateEmail,
+        trigger: 'blur'
+      }]
+    };
+
+    const handleRegister = () => {
+      formState.loading = true;
+      register(formState.username, formState.password).then(() => {
+        formState.loading = false;
+        localStorage.setItem("username", formState.username);
+        localStorage.setItem("password", formState.password);
+        router.push('/login');
+      }).catch(error => {
+        formState.loading = false;
+        console.log(error);
+      });
+    }
+    return {
+      formRef,
+      formState,
+      rules,
+      handleRegister
+    }
+  }
 });
 </script>
 

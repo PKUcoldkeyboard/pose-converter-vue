@@ -3,93 +3,190 @@
     <div class="container">
       <h1 class="file-manager-title">文件管理</h1>
       <div class="file-manager-search">
-        <a-input-search
-          placeholder="请输入文件名关键词"
-          enter-button
-          style="max-width: 400px;"
-        />
+        <a-input-search v-model:value="keyword" placeholder="请输入文件名关键词" enter-button @search="searchFileList" style="max-width: 400px;" />
       </div>
       <div class="file-manager-bucket">
         <div class="file-manager-bucket-info">
-          <span class="file-manager-bucket-username">用户名</span>
+          <span class="file-manager-bucket-username">{{ username }}</span>
           <br />
-          <span class="file-manager-bucket-creation-time">创建时间: xxx</span>
-          <span class="file-manager-bucket-file-info"
-            >文件总大小: xxx，文件数: xxx</span
-          >
-        </div>
-        <div class="file-manager-bucket-action">
-          <a-button class="btn-refresh">刷新<redo-outlined /></a-button>
-          <a-upload>
-            <a-button type="primary" class="btn-upload">上传<upload-outlined /></a-button>
-          </a-upload>
+          <span class="file-manager-bucket-file-info">文件总大小: {{ tableState.totalFileSize }}，文件数: {{ tableState.totalFileCount }}</span>
         </div>
       </div>
       <div class="file-manager-path">
-        <a-button class="btn-refresh" style="padding: 0px 10px;"><left-outlined /></a-button>
-        <a-breadcrumb class="bread-crumb">
-          <a-breadcrumb-item><a href="">Path</a></a-breadcrumb-item>
-          <a-breadcrumb-item><a href="">to</a></a-breadcrumb-item>
-          <a-breadcrumb-item><a href="">file</a></a-breadcrumb-item>
-        </a-breadcrumb>
-        <a-button class="btn-refresh">选择或创建路径<select-outlined /></a-button>
+        <a-button class="btn-refresh" @click.native.prevent="refresh">刷新<redo-outlined /></a-button>
+          <a-upload :before-upload="handleUpload" :showUploadList="false">
+            <a-button type="primary" class="btn-upload">上传<upload-outlined /></a-button>
+          </a-upload>
       </div>
       <div class="file-manager-table">
-        <a-table :dataSource="fileList" 
-                 :columns="columns" rowKey="id" />
+        <a-table :columns="columns" :dataSource="fileList" :scroll="{ y: 400 }" :pagination="false">
+          <template #bodyCell="{column, record}">
+            <template v-if="column.key === 'action'">
+              <a :href="record.fileUrl" download><download-outlined/>下载</a>
+              <a-button type="link" danger @click.native.prevent="handleDelete(record.fileName)">删除</a-button>
+            </template>
+          </template>
+        </a-table>
       </div>
     </div>
   </div>
 </template>
 <script>
-import { defineComponent, computed, ref, unref } from "vue";
-import { UploadOutlined, RedoOutlined, SelectOutlined, LeftOutlined } from "@ant-design/icons-vue";
-import { Table } from "ant-design-vue";
+import { computed, defineComponent, reactive, ref } from "vue";
+import { UploadOutlined, RedoOutlined, SelectOutlined, LeftOutlined, DownloadOutlined } from "@ant-design/icons-vue";
+import { Modal, Table, message } from "ant-design-vue";
+import { useStore } from "vuex";
+import { deleteFile, listFile, searchFiles, uploadFile } from "@/api/minio";
+import { transformSize, transformTime } from "@/utils/transform";
 
 export default defineComponent({
   components: {
     UploadOutlined,
-    RedoOutlined, 
+    RedoOutlined,
     SelectOutlined,
-    LeftOutlined
-  },
-  data() {
-    return {
-      fileList: [
-        // 示例数据，实际数据应从服务器获取
-        {
-          id: 1,
-          fileName: "3D_Pose_1.obj",
-          fileSize: "2.4MB",
-          uploadTime: "2023-04-14 10:30",
-        },
-        {
-          id: 2,
-          fileName: "3D_Pose_2.obj",
-          fileSize: "1.9MB",
-          uploadTime: "2023-04-14 14:20",
-        },
-      ],
-      columns: [
-        { title: "文件名", dataIndex: "fileName", key: "fileName" },
-        { title: "文件大小", dataIndex: "fileSize", key: "fileSize" },
-        { title: "上传时间", dataIndex: "uploadTime", key: "uploadTime" },
-        {
-          title: "操作",
-          key: "action",
-          scopedSlots: { customRender: "action" },
-        },
-      ],
-    };
+    LeftOutlined,
+    DownloadOutlined,
+    Table,
   },
   setup() {
+    const columns = [
+      {
+        title: "文件名",
+        dataIndex: "fileName",
+        key: "fileName",
+      },
+      {
+        title: "文件大小",
+        dataIndex: "fileSize",
+        key: "fileSize",
+      },
+      {
+        title: "上传时间",
+        dataIndex: "uploadTime",
+        key: "uploadTime",
+      },
+      {
+        title: "操作",
+        key: "action",
+        scopedSlots: { customRender: "action" },
+      }
+    ];
+
+    const tableState = reactive({
+      createTime: "",
+      totalFileSize: "",
+      totalFileCount: "",
+    });
+
+    const store = useStore();
     
+    const fileList = ref([]);
+    const fetchFileList = async() => {
+      try {
+        // 从store中获取用户名作为bucketName
+        const prefix = "/";
+        listFile(username.value, prefix).then((res) => {
+          // 构造fileList的值，通过循环
+          let fileValueList = [];
+          for (let i = 0; i < res.data.files.length; i++) {
+            let fileValue = {
+              fileName: res.data.files[i].name,
+              fileSize: transformSize(res.data.files[i].size),
+              uploadTime: transformTime(res.data.files[i].lastModified),
+              fileUrl: res.data.files[i].url,
+            };
+            fileValueList.push(fileValue);
+          }
+          fileList.value = fileValueList;
+          tableState.totalFileSize = transformSize(res.data.totalFileSize);
+          tableState.totalFileCount = res.data.totalFileCount;
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    }
+
+    const searchFileList = async() => {
+      try {
+        // 从store中获取用户名作为bucketName
+        const prefix = "/";
+        searchFiles(username.value, prefix, keyword.value).then((res) => {
+          // 构造fileList的值，通过循环
+          let fileValueList = [];
+          for (let i = 0; i < res.data.length; i++) {
+            let fileValue = {
+              fileName: res.data[i].name,
+              fileSize: transformSize(res.data[i].size),
+              uploadTime: transformTime(res.data[i].lastModified),
+            };
+            fileValueList.push(fileValue);
+          }
+          fileList.value = fileValueList;
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    }
+
+    const refresh = () => {
+      fetchFileList();
+      message.success("刷新成功");
+    };
+
+    const handleUpload = async(file) => {
+      try {
+        uploadFile(username.value, file).then((res) => {
+          message.success("上传成功");
+          fetchFileList();
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    }
+
+    const handleDelete = async(objectName) => {
+      try {
+        // 从store中获取用户名作为bucketName
+        const bucketName = store.getters.username;
+        Modal.confirm({
+          title: "删除文件",
+          content: "确定删除该文件吗？",
+          okText: "确定",
+          cancelText: "取消",
+          onOk() {
+            deleteFile(bucketName, objectName).then((res) => {
+              message.success("删除成功");
+              fetchFileList();
+            });
+          },
+          onCancel() {
+            message.info("取消删除");
+          },
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    }
+    
+    const username = computed(() => store.getters.username);
+
+    const keyword = ref("");
+    return {
+      tableState,
+      columns,
+      fileList,
+      username,
+      refresh,
+      keyword,
+      fetchFileList,
+      searchFileList,
+      handleUpload,
+      handleDelete,
+    };
   },
-  methods: {
-    // @ts-ignore
-    downloadFile(file) {
-      // 实现文件下载功能
-    },
+  created() {
+    // 获取文件列表
+    this.fetchFileList();
   },
 });
 </script>
@@ -125,33 +222,33 @@ export default defineComponent({
 }
 
 .file-manager-bucket-info {
-display: flex;
-align-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .file-manager-bucket-username {
-margin-left: 8px;
+  margin-left: 8px;
 }
 
 .file-manager-bucket-creation-time {
-margin-left: 8px;
-color: #a5a5a5;
+  margin-left: 8px;
+  color: #a5a5a5;
 }
 
 .file-manager-bucket-file-info {
-margin-left: 16px;
-color: #a5a5a5;
+  margin-left: 16px;
+  color: #a5a5a5;
 }
 
 .file-manager-bucket-action {
-display: flex;
-align-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .file-manager-path {
-display: flex;
-align-items: center;
-margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
 }
 
 .file-manager-path-text {
@@ -169,10 +266,10 @@ margin-bottom: 16px;
 }
 
 .file-manager-table {
-background-color: #fff;
-padding: 24px;
-border-radius: 4px;
-box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+  padding: 24px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .btn-upload {

@@ -3,8 +3,11 @@
         <div class="container">
             <h1 class="image-to-3d-title">图片转3D</h1>
             <div class="file-upload">
-                <input type="file" ref="imageInput" @change="previewImage" accept=".png" style="display: none" />
-                <a-button type="primary" @click="selectImage">选择图片</a-button>
+                <a-upload :file-list="fileList"
+                          :showUploadList="false"
+                          :before-upload="beforeUpload">
+                    <a-button><upload-outlined />选择图片</a-button>
+                </a-upload>
                 <p class="file-upload-note">请上传png格式的图片文件。根据文件大小，转换过程可能需要一些时间。点击开始转换后会自动存储相应文件到文件管理模块中。</p>
             </div>
             <div class="image-preview">
@@ -18,7 +21,7 @@
                 </div>
             </div>
             <div class="buttons-container">
-                <a-button type="primary" class="process-button" @click="processImage">开始转换</a-button>
+                <a-button type="primary" class="process-button" @click.native.prevent="handleConvert">开始转换</a-button>
             </div>
 
             <div class="image-to-3d-process" v-if="processing">
@@ -30,68 +33,71 @@
 </template>
   
 <script>
-import { defineComponent, ref } from 'vue';
+import { convert } from '@/api/image';
+import { uploadFile } from '@/api/minio';
+import { message } from 'ant-design-vue';
+import { computed, defineComponent, ref } from 'vue';
+import { useStore } from 'vuex';
+import { UploadOutlined } from '@ant-design/icons-vue';
 
 export default defineComponent({
+    components: {
+        UploadOutlined
+    },
     setup() {
-        const imageInput = ref(null);
-        const uploadedImageSrc = ref(null);
-        const generatedImageSrc = ref(null);
+        const store = useStore();
+
         const processing = ref(false);
+        const uploadedImageSrc = ref('');
+        const generatedImageSrc = ref('');
+        const fileList = ref([]);
 
-        const selectImage = () => {
-            imageInput.value.click();
-        };
-
-        const previewImage = (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            // 验证文件类型
-            if (file.type !== 'image/png') {
-                alert('请上传PNG格式的图片文件');
-                return;
+        const beforeUpload = async(file) => {
+            const isPng = file.type === 'image/png';
+            if (!isPng) {
+                message.error('请上传png格式的图片文件');
+                return false;
             }
 
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                uploadedImageSrc.value = e.target.result;
-            };
-            reader.readAsDataURL(file);
+            // 上传图片
+            try {
+                const response = await uploadFile(username.value, file);
+                const uploadedFile = new File([file], response.data, { type: file.type });
+                fileList.value.push(uploadedFile);
+                uploadedImageSrc.value = response.data;
+                message.success("上传成功");
+            } catch (error) {
+                console.log(error);
+                message.error("上传失败");
+                return false;
+            }
+            return false;
         };
 
-        const processImage = async () => {
-            if (!uploadedImageSrc.value) return;
-
-            processing.value = true;
-
-            // 上传文件并转换为3D姿态
-            // 实际实现时，需要调用后端接口处理文件
-            setTimeout(() => {
+        const handleConvert = async () => {
+            processing.value = true;    
+            try {
+                const res = await convert(username.value, uploadedImageSrc.value);
+                generatedImageSrc.value = "http://" + res.data.image_path;
+                message.success('转换成功');
+            } catch (error) {
+                console.log(error);
+                message.error('转换失败');
+            } finally {
                 processing.value = false;
-                alert('图片处理完成');
-                // 示例生成的图片，实际上需要从后端获取
-                generatedImageSrc.value = uploadedImageSrc.value;
-            }, 3000);
+            }
         };
 
-        const saveResult = async () => {
-            if (!generatedImageSrc.value) return;
-
-            // 保存生成的图片
-            // 实际实现时，需要调用后端接口处理文件
-            alert('保存成功');
-        };
-
+        const username = computed(() => store.getters.username);
+        
         return {
-            imageInput,
+            processing,
             uploadedImageSrc,
             generatedImageSrc,
-            processing,
-            selectImage,
-            previewImage,
-            processImage,
-            saveResult,
+            fileList,
+            beforeUpload,
+            handleConvert,
+            username,
         };
     },
 });

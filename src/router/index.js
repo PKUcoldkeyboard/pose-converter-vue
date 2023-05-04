@@ -1,3 +1,4 @@
+import { getToken } from "@/utils/auth";
 import { createRouter, createWebHashHistory } from "vue-router";
 
 const Index = () => import("../components/Index.vue");
@@ -24,5 +25,15 @@ const router = createRouter({
   history: createWebHashHistory(),
   routes
 });
+
+router.beforeEach((to, from ,next) => {
+  // 检查是否登录
+  const token = localStorage.getItem('token') || '';
+  if ((to.path === '/login' || to.path === '/register' || to.path == '/find-pwd') && token) {
+    next('/video-to-3d');
+  } else {
+    next();
+  }
+})
 
 export default router;

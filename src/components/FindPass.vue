@@ -2,9 +2,9 @@
     <div class="reset-password-page">
         <div class="reset-password-container">
             <h1 class="reset-password-title">找回密码</h1>
-            <a-form @submit="handleSubmit" class="reset-password-form">
-                <a-form-item>
-                    <a-input v-model="email" placeholder="邮箱">
+            <a-form ref="formRef" :model="formState" :rules="rules" @finish="handleReset" class="reset-password-form">
+                <a-form-item has-feedback name="email">
+                    <a-input v-model:value="formState.email" placeholder="邮箱">
                         <template #prefix>
                             <mail-outlined style="color: rgba(0, 0, 0, 0.45)" />
                         </template>
@@ -23,24 +23,55 @@
   
 <script>
 import { MailOutlined } from '@ant-design/icons-vue';
-import { defineComponent } from 'vue';
+import { Modal } from 'ant-design-vue';
+import { defineComponent, reactive, ref } from 'vue';
 
 export default defineComponent({
     components: {
         MailOutlined,
     },
 
-    data() {
-        return {
+    setup() {
+        const formRef = ref();
+        const formState = reactive({
             email: '',
+            loading: false,
+        });
+
+        let validateEmail = async (rule, value) => {
+            if (!value) {
+                return Promise.reject('请输入邮箱');
+            }
+            if (!/\w+([-+.]\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*/.test(value)) {
+                return Promise.reject('请输入正确的邮箱');
+            }
+            return Promise.resolve();
         };
-    },
-    methods: {
-        handleSubmit(e) {
-            e.preventDefault();
-            // 提交找回密码表单
-        },
-    },
+
+        const rules = {
+            email: [{required: true, validator: validateEmail, trigger: 'blur' }],
+        };
+
+        const handleReset = () => {
+            formState.loading = true;
+            // 实际不执行，timeout 2秒后提示成功
+            setTimeout(() => {
+                formState.loading = false;
+                formRef.value.resetFields();
+                Modal.success({
+                    title: '重置密码邮件已发送',
+                    content: '请注意查收',
+                });
+            }, 2000);
+        }
+
+        return {
+            formRef,
+            formState,
+            rules,
+            handleReset,
+        }
+    }
 });
 </script>
   

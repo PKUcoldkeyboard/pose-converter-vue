@@ -9,18 +9,18 @@ export function getPostById(id) {
 
 export function getPostList(page, size) {
     return api({
-        url: "/post",
+        url: "/post/",
         method: "get",
         params: {
             "pageNum": page,
             "pageSize": size
-        }
+        },
     });
 }
 
 export function createPost(title, content, userId) {
     return api({
-        url: "/post",
+        url: "/post/",
         method: "post",
         data: {
             "title": title,

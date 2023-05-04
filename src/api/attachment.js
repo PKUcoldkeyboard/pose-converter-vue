@@ -1,15 +1,21 @@
-import { del, get, post } from "@/utils/request";
+import api from "@/utils/request";
 
 export function getAttachmentById(id) {
-    return get("/attachment/" + id);
+    return api({
+        url: "/attachment/" + id,
+        method: "get"
+    })
 }
 
 export function getAttachmentsByPostId(id) {
-    return get("/attachment/post/" + id);
+    return api({
+        url: "/attachment/post/" + id,
+        method: "get"
+    })
 }
 
 export function createAttachment(postId, fileName, fileSize, fileType, fileUrl) {
-    return post("/attachment", {
+    return api.post("/attachment/", {
         "postId": postId,
         "fileName": fileName,
         "fileSize": fileSize,
@@ -19,5 +25,8 @@ export function createAttachment(postId, fileName, fileSize, fileType, fileUrl) 
 }
 
 export function deleteAttachment(id) {
-    return del("/attachment/" + id);
+    return api({
+        url: "/attachment/" + id,
+        method: "delete"
+    })
 }

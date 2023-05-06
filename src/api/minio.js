@@ -30,8 +30,12 @@ export function listFile(bucketName, prefix) {
 
 export function deleteFile(bucketName, objectName) {
     return api({
-        url: "/file/" + bucketName + "/" + objectName,
-        method: "delete"
+        url: "/file/delete",
+        method: "delete",
+        params: {
+            bucketName: bucketName,
+            objectName: objectName
+        }
     })
 }
 
@@ -43,6 +47,16 @@ export function searchFiles(bucketName, prefix, keyword) {
             bucketName: bucketName,
             prefix: prefix,
             keyword: keyword
+        }
+    })
+}
+
+export function getMetaData(bucketName) {
+    return api({
+        url: "/file/meta",
+        method: "get",
+        params: {
+            bucketName: bucketName
         }
     })
 }

@@ -9,14 +9,23 @@
         <div class="file-manager-bucket-info">
           <span class="file-manager-bucket-username">{{ username }}</span>
           <br />
-          <span class="file-manager-bucket-file-info">文件总大小: {{ tableState.totalFileSize }}，文件数: {{ tableState.totalFileCount }}</span>
+          <span class="file-manager-bucket-file-info">文件总大小: {{ totalFileSize }}，文件数: {{ totalFileCount }}</span>
         </div>
       </div>
       <div class="file-manager-path">
+
         <a-button class="btn-refresh" @click.native.prevent="refresh">刷新<redo-outlined /></a-button>
           <a-upload :before-upload="handleUpload" :showUploadList="false">
             <a-button type="primary" class="btn-upload">上传<upload-outlined /></a-button>
           </a-upload>
+      </div>
+      <!-- 添加面包屑导航 -->
+      <div class="breadcrumb-wrapper">
+        <a-breadcrumb :separator="'>'">
+          <a-breadcrumb-item v-for="(item, index) in breadcrumbItems" :key="index" @click="changePath(index)">
+            {{ item }}
+          </a-breadcrumb-item>
+        </a-breadcrumb>
       </div>
       <div class="file-manager-table">
         <a-table :columns="columns" :dataSource="fileList" :scroll="{ y: 400 }" :pagination="false">
@@ -24,6 +33,9 @@
             <template v-if="column.key === 'action'">
               <a :href="record.fileUrl" download><download-outlined/>下载</a>
               <a-button type="link" danger @click.native.prevent="handleDelete(record.fileName)">删除</a-button>
+            </template>
+            <template v-else-if="column.key === 'fileName'">
+              <span><a @click="navigateToFolder(record)">{{ record.fileName }}</a></span>
             </template>
           </template>
         </a-table>
@@ -36,7 +48,7 @@ import { computed, defineComponent, reactive, ref } from "vue";
 import { UploadOutlined, RedoOutlined, SelectOutlined, LeftOutlined, DownloadOutlined } from "@ant-design/icons-vue";
 import { Modal, Table, message } from "ant-design-vue";
 import { useStore } from "vuex";
-import { deleteFile, listFile, searchFiles, uploadFile } from "@/api/minio";
+import { deleteFile, getMetaData, listFile, searchFiles, uploadFile } from "@/api/minio";
 import { transformSize, transformTime } from "@/utils/transform";
 
 export default defineComponent({
@@ -72,11 +84,22 @@ export default defineComponent({
       }
     ];
 
-    const tableState = reactive({
-      createTime: "",
-      totalFileSize: "",
-      totalFileCount: "",
-    });
+    const totalFileSize = ref("");
+    const totalFileCount = ref(0);
+
+    const currentPath = ref("/");
+    const breadcrumbItems = computed(() => currentPath.value.split("/").filter((item) => item !== ""));
+    const changePath = (index) => {
+      currentPath.value = "/" + breadcrumbItems.value.slice(0, index + 1).join("/");
+      fetchFileList();
+    };
+
+    const navigateToFolder = (record) => {
+      if (record.isDir) {
+        currentPath.value += record.fileName + "/";
+        fetchFileList();
+      }
+    }
 
     const store = useStore();
     
@@ -90,16 +113,18 @@ export default defineComponent({
           let fileValueList = [];
           for (let i = 0; i < res.data.files.length; i++) {
             let fileValue = {
-              fileName: res.data.files[i].name,
-              fileSize: transformSize(res.data.files[i].size),
+              fileName: res.data.files[i].fileName,
+              fileSize: transformSize(res.data.files[i].fileSize),
               uploadTime: transformTime(res.data.files[i].lastModified),
               fileUrl: res.data.files[i].url,
             };
             fileValueList.push(fileValue);
           }
           fileList.value = fileValueList;
-          tableState.totalFileSize = transformSize(res.data.totalFileSize);
-          tableState.totalFileCount = res.data.totalFileCount;
+        });
+        getMetaData(username.value).then((res) => {
+          totalFileSize.value = transformSize(res.data.totalFileSize);
+          totalFileCount.value = res.data.totalFileCount;
         });
       } catch (error) {
         console.log(error);
@@ -113,10 +138,10 @@ export default defineComponent({
         searchFiles(username.value, prefix, keyword.value).then((res) => {
           // 构造fileList的值，通过循环
           let fileValueList = [];
-          for (let i = 0; i < res.data.length; i++) {
+          for (let i = 0; i < res.data.files.length; i++) {
             let fileValue = {
-              fileName: res.data[i].name,
-              fileSize: transformSize(res.data[i].size),
+              fileName: res.data[i].fileName,
+              fileSize: transformSize(res.data[i].fileSize),
               uploadTime: transformTime(res.data[i].lastModified),
             };
             fileValueList.push(fileValue);
@@ -172,16 +197,21 @@ export default defineComponent({
 
     const keyword = ref("");
     return {
-      tableState,
+      totalFileCount,
+      totalFileSize,
       columns,
       fileList,
       username,
       refresh,
       keyword,
+      currentPath,
+      breadcrumbItems,
+      changePath,
       fetchFileList,
       searchFileList,
       handleUpload,
       handleDelete,
+      navigateToFolder,
     };
   },
   created() {
@@ -191,6 +221,9 @@ export default defineComponent({
 });
 </script>
 <style scoped>
+.breadcrumb-wrapper {
+  margin-bottom: 16px;
+}
 .file-manager-page {
   margin-top: 72px;
   background-color: #f5f5f5;

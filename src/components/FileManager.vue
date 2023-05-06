@@ -19,23 +19,14 @@
             <a-button type="primary" class="btn-upload">上传<upload-outlined /></a-button>
           </a-upload>
       </div>
-      <!-- 添加面包屑导航 -->
-      <div class="breadcrumb-wrapper">
-        <a-breadcrumb :separator="'>'">
-          <a-breadcrumb-item v-for="(item, index) in breadcrumbItems" :key="index" @click="changePath(index)">
-            {{ item }}
-          </a-breadcrumb-item>
-        </a-breadcrumb>
-      </div>
       <div class="file-manager-table">
-        <a-table :columns="columns" :dataSource="fileList" :scroll="{ y: 400 }" :pagination="false">
+        <a-table 
+        :row-selection="{ selectedRowKeys: selectedRowKeys, onChange: handleSelectChange }"
+        :columns="columns" :dataSource="fileList" :scroll="{ y: 400 }" :pagination="false">
           <template #bodyCell="{column, record}">
             <template v-if="column.key === 'action'">
               <a :href="record.fileUrl" download><download-outlined/>下载</a>
               <a-button type="link" danger @click.native.prevent="handleDelete(record.fileName)">删除</a-button>
-            </template>
-            <template v-else-if="column.key === 'fileName'">
-              <span><a @click="navigateToFolder(record)">{{ record.fileName }}</a></span>
             </template>
           </template>
         </a-table>
@@ -44,7 +35,7 @@
   </div>
 </template>
 <script>
-import { computed, defineComponent, reactive, ref } from "vue";
+import { computed, defineComponent, reactive, ref, toRefs } from "vue";
 import { UploadOutlined, RedoOutlined, SelectOutlined, LeftOutlined, DownloadOutlined } from "@ant-design/icons-vue";
 import { Modal, Table, message } from "ant-design-vue";
 import { useStore } from "vuex";
@@ -73,9 +64,9 @@ export default defineComponent({
         key: "fileSize",
       },
       {
-        title: "上传时间",
-        dataIndex: "uploadTime",
-        key: "uploadTime",
+        title: "修改时间",
+        dataIndex: "lastModified",
+        key: "lastModified",
       },
       {
         title: "操作",
@@ -87,20 +78,6 @@ export default defineComponent({
     const totalFileSize = ref("");
     const totalFileCount = ref(0);
 
-    const currentPath = ref("/");
-    const breadcrumbItems = computed(() => currentPath.value.split("/").filter((item) => item !== ""));
-    const changePath = (index) => {
-      currentPath.value = "/" + breadcrumbItems.value.slice(0, index + 1).join("/");
-      fetchFileList();
-    };
-
-    const navigateToFolder = (record) => {
-      if (record.isDir) {
-        currentPath.value += record.fileName + "/";
-        fetchFileList();
-      }
-    }
-
     const store = useStore();
     
     const fileList = ref([]);
@@ -109,19 +86,23 @@ export default defineComponent({
         // 从store中获取用户名作为bucketName
         const prefix = "/";
         listFile(username.value, prefix).then((res) => {
-          // 构造fileList的值，通过循环
-          let fileValueList = [];
-          for (let i = 0; i < res.data.files.length; i++) {
-            let fileValue = {
-              fileName: res.data.files[i].fileName,
-              fileSize: transformSize(res.data.files[i].fileSize),
-              uploadTime: transformTime(res.data.files[i].lastModified),
-              fileUrl: res.data.files[i].url,
-            };
-            fileValueList.push(fileValue);
-          }
-          fileList.value = fileValueList;
+          // 设置fileList的值，如果isDir是true，则设置fileSize和uploadTime为空字符串，需要递归直到没有children属性
+          const mapFunction = (item) => {
+            if (item.isDir) {
+              item.fileSize = "";
+              item.lastModified = "";
+              if (item.children) {
+                item.children = item.children.map(mapFunction);
+              }
+            } else {
+              item.fileSize = transformSize(item.fileSize);
+              item.lastModified = transformTime(item.lastModified);
+            }
+            return item;
+          };
+          fileList.value = res.data.map(mapFunction);
         });
+
         getMetaData(username.value).then((res) => {
           totalFileSize.value = transformSize(res.data.totalFileSize);
           totalFileCount.value = res.data.totalFileCount;
@@ -136,17 +117,7 @@ export default defineComponent({
         // 从store中获取用户名作为bucketName
         const prefix = "/";
         searchFiles(username.value, prefix, keyword.value).then((res) => {
-          // 构造fileList的值，通过循环
-          let fileValueList = [];
-          for (let i = 0; i < res.data.files.length; i++) {
-            let fileValue = {
-              fileName: res.data[i].fileName,
-              fileSize: transformSize(res.data[i].fileSize),
-              uploadTime: transformTime(res.data[i].lastModified),
-            };
-            fileValueList.push(fileValue);
-          }
-          fileList.value = fileValueList;
+
         });
       } catch (error) {
         console.log(error);
@@ -195,7 +166,20 @@ export default defineComponent({
     
     const username = computed(() => store.getters.username);
 
+    
+    const state = reactive({
+      selectedRowKeys: [],
+      loading: false,
+    });
+
+    const hasSelected = computed(() => state.selectedRowKeys.length > 0);
+
+    const handleSelectChange = (selectedRowKeys) => {
+      state.selectedRowKeys = selectedRowKeys;
+    };
+
     const keyword = ref("");
+
     return {
       totalFileCount,
       totalFileSize,
@@ -204,14 +188,13 @@ export default defineComponent({
       username,
       refresh,
       keyword,
-      currentPath,
-      breadcrumbItems,
-      changePath,
       fetchFileList,
       searchFileList,
       handleUpload,
       handleDelete,
-      navigateToFolder,
+      ...toRefs(state),
+      hasSelected,
+      handleSelectChange,
     };
   },
   created() {

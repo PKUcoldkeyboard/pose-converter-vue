@@ -13,11 +13,16 @@
           <div class="post-content">{{ post.content }}</div>
 
           <!-- 显示附件列表 -->
+          <!-- 列表标题 -->
+          <a-divider orientation="left" style="border-color: black" dashed>附件</a-divider>
           <a-list v-if="post.attachments && post.attachments.length" class="attachment-list">
             <a-list-item v-for="(attachment, index) in post.attachments" :key="index">
-              {{ attachment.fileName }}
+              <a :href="attachment.fileUrl" target="_blank">
+                {{ attachment.fileName }} ({{ attachment.fileSize }})
+              </a>
             </a-list-item>
           </a-list>
+          <a-divider orientation="left" style="border-color: black" dashed>评论</a-divider>
           <a-list :dataSource="getCommentsByPostId(post.id)" class="comment-list">
             <template #renderItem="{ item: comment }">
               <a-list-item>
@@ -27,7 +32,6 @@
               </a-list-item>
             </template>
           </a-list>
-          <a-upload :post-id="post.id" class="attachment-upload"></a-upload>
           <!-- 添加回复按钮 -->
           <a-button @click="showReplyModal=true; replyPostId=post.id" class="reply-button">回复</a-button>
           <a-modal title="回复帖子" :visible="showReplyModal" @ok="handleReplyClick" @cancel="showReplyModal=false">
@@ -55,9 +59,8 @@
             </a-form-item>
           </a-form>
           <div class="file-upload">
-          <a-upload :file-list="fileList"
-                          :showUploadList="true"
-                          :before-upload="beforeUpload">
+          <a-upload :showUploadList="true"
+                    :before-upload="validateFile">
             <a-button><upload-outlined />添加附件</a-button>
           </a-upload>
         </div>
@@ -72,11 +75,11 @@ import { computed, defineComponent, ref } from 'vue';
 import { useStore } from 'vuex';
 import { createComment, getComments, getCommentsByPostId } from '@/api/comment';
 import { createPost, getPostList } from '@/api/post';
-import { transformTime } from '@/utils/transform';
+import { transformTime, transformSize } from '@/utils/transform';
 import { getUserList } from '@/api/user';
 import { Modal, message } from 'ant-design-vue';
 import { uploadFile } from '@/api/minio';
-import { getAttachmentsByPostId } from '@/api/attachment';
+import { createAttachment, getAttachmentsByPostId } from '@/api/attachment';
 
 export default defineComponent({
   setup() {
@@ -93,7 +96,6 @@ export default defineComponent({
     const replyContent = ref('');
     const replyPostId = ref('');
     const fileList = ref([]);
-    const fileUrlList = ref([]);
 
 
     const fetchComments = async (postId) => {
@@ -104,6 +106,15 @@ export default defineComponent({
     const fetchPosts = async () => {
       const response = await getPostList(currentPage.value, 10);
       posts.value = response.data;
+
+      for (let i = 0; i < posts.value.length; i++) {
+        const post = posts.value[i];
+        const response2 = await getAttachmentsByPostId(post.id)
+        posts.value[i].attachments = response2.data;
+        for (let j = 0; j < response2.data.length; j++) {
+          posts.value[i].attachments[j].fileSize = transformSize(posts.value[i].attachments[j].fileSize);
+        }
+      }
     };
 
     const fetchUsers = async () => {
@@ -142,30 +153,42 @@ export default defineComponent({
 
       // 创建附件
       const postId = response.data.id;
+      // 遍历 fileList，上传每个文件
+      fileList.value.forEach(async (file) => {
+        let url = '';
+        try {
+          const response = await uploadFile(username.value, file);
+          url = response.data;
+          message.success("上传成功");
+        } catch (error) {
+          console.log(error);
+          message.error("上传失败");
+        }
+
+        try {
+          const response = await createAttachment(postId, file.name, file.size, 'object', url);
+          message.success("创建附件成功");
+        } catch (error) {
+          console.log(error);
+          message.error("创建附件失败");
+        }
+      });
+      fetchPosts();
+      fetchUsers();
+      fetchComments();
       message.success('创建成功');
     };
 
-    
-    const beforeUpload = async(file) => {
-        // 限制mp4、png、blender三种格式的文件
-        const fileType = file.type;
-        if (fileType !== "video/mp4" && fileType !== "image/png" && fileType !== "application/x-blender") {
-            message.error("只能上传mp4、png、blender三种格式的文件");
-            return false;
-        }
-        // 上传文件
-        try {
-            const response = await uploadFile(username.value, file);
-            const uploadedFile = new File([file], response.data, { type: file.type });
-            fileList.value.push(uploadedFile);
-            fileUrlList.value.push(response.data);
-            message.success("上传成功");
-        } catch (error) {
-            console.log(error);
-            message.error("上传失败");
-            return false;
-        }
+    const validateFile = (file) => {
+      // 限制 mp4、png、blender 三种格式的文件
+      const fileType = file.type;
+      if (fileType !== "video/mp4" && fileType !== "image/png" && fileType !== "application/x-blender") {
+        message.error("只能上传 mp4、png、blender 三种格式的文件");
         return false;
+      }
+      fileList.value.push(file);
+
+      return false;
     };
 
     const handleReplyClick = async (post) => {
@@ -198,25 +221,18 @@ export default defineComponent({
       newPostTitle,
       newPostContent,
       handleCreatePost,
-      beforeUpload,
       fileList,
       username,
       handleReplyClick,
       replyContent,
       replyPostId,
-      fileUrlList
+      validateFile,
     }
   },
   created() {
     this.fetchPosts();
     this.fetchComments();
     this.fetchUsers();
-
-    // 获取每个帖子对应的附件列表
-    this.posts.forEach(async (post) => {
-      const response = await getAttachmentsByPostId(post.id);
-      post.attachments = response.data;
-    });
   },
 });
 </script>

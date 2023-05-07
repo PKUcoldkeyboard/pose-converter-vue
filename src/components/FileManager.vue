@@ -3,7 +3,8 @@
     <div class="container">
       <h1 class="file-manager-title">文件管理</h1>
       <div class="file-manager-search">
-        <a-input-search v-model:value="keyword" placeholder="请输入文件名关键词" enter-button @search="searchFileList" style="max-width: 400px;" />
+        <a-input-search v-model:value="keyword" placeholder="请输入文件名关键词" enter-button @search="searchFileList"
+          style="max-width: 400px;" />
       </div>
       <div class="file-manager-bucket">
         <div class="file-manager-bucket-info">
@@ -13,34 +14,65 @@
         </div>
       </div>
       <div class="file-manager-path">
-
         <a-button class="btn-refresh" @click.native.prevent="refresh">刷新<redo-outlined /></a-button>
-          <a-upload :before-upload="handleUpload" :showUploadList="false">
-            <a-button type="primary" class="btn-upload">上传<upload-outlined /></a-button>
-          </a-upload>
+        <a-button type="primary" :disabled="!hasSelected" :loading="loading" @click="handleUpload"
+          class="btn-upload">上传<upload-outlined /></a-button>
+        <span style="margin-left: 8px">
+          <template v-if="hasSelected">
+            {{ `Selected ${selectedRowKeys.length} items` }}
+          </template>
+        </span>
       </div>
       <div class="file-manager-table">
-        <a-table 
-        :row-selection="{ selectedRowKeys: selectedRowKeys, onChange: handleSelectChange }"
-        :columns="columns" :dataSource="fileList" :scroll="{ y: 400 }" :pagination="false">
-          <template #bodyCell="{column, record}">
+        <a-table :row-selection="{ selectedRowKeys: selectedRowKeys, onChange: onSelectChange }" :columns="columns"
+          :dataSource="fileList" :scroll="{ y: 400 }" :pagination="false">
+          <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'action'">
-              <a :href="record.fileUrl" download><download-outlined/>下载</a>
-              <a-button type="link" danger @click.native.prevent="handleDelete(record.fileName)">删除</a-button>
+              <a v-if="!record.isDir"
+                @click="showFileRenameModal = true; prefix = record.prefix; oldObjectName = record.fileName;"><edit-outlined />重命名</a>
+              <a v-else-if="record.isDir"
+                @click="showDirectoryRenameModal = true; prefix = record.prefix; oldObjectName = record.fileName;"><edit-outlined />重命名</a>
+
+              <a style="margin-left: 8px;" v-if="!record.isDir" :href="record.url" download><download-outlined />下载</a>
+              <a-popconfirm v-if="!record.isDir" @confirm="handleDelete(record.fileName)" title="确认删除?">
+                <template #icon><question-circle-outlined style="color: red" /></template>
+                <a style="color:red; margin-left: 8px;">删除</a>
+              </a-popconfirm>
             </template>
           </template>
         </a-table>
+        <a-modal title="修改文件名" :visible="showFileRenameModal" @ok="handleFileRename"
+          @cancel="showFileRenameModal = false; prefix = ''; oldObjectName = ''; newObjectName = ''">
+          <a-form>
+            <a-form-item label="新文件名">
+              <a-input v-model:value="newObjectName" placeholder="请输入文件名"></a-input>
+            </a-form-item>
+          </a-form>
+        </a-modal>
+        <a-modal title="修改目录名" :visible="showDirectoryRenameModal" @ok="handleDirectoryRename"
+          @cancel="showDirectoryRenameModal = false; prefix = ''; oldObjectName = ''; newObjectName = ''">
+          <a-form>
+            <a-form-item label="新目录名">
+              <a-input v-model:value="newObjectName" placeholder="请输入目录名"></a-input>
+            </a-form-item>
+          </a-form>
+        </a-modal>
       </div>
     </div>
   </div>
 </template>
 <script>
 import { computed, defineComponent, reactive, ref, toRefs } from "vue";
-import { UploadOutlined, RedoOutlined, SelectOutlined, LeftOutlined, DownloadOutlined } from "@ant-design/icons-vue";
+import {
+  UploadOutlined, RedoOutlined, SelectOutlined, LeftOutlined, DownloadOutlined, QuestionCircleOutlined,
+  CheckOutlined, EditOutlined
+} from "@ant-design/icons-vue";
 import { Modal, Table, message } from "ant-design-vue";
 import { useStore } from "vuex";
-import { deleteFile, getMetaData, listFile, searchFiles, uploadFile } from "@/api/minio";
-import { transformSize, transformTime } from "@/utils/transform";
+import { deleteFile, getMetaData, listFile, renameDir, renameFile, searchFiles } from "@/api/minio";
+import { transformSize, transformTime, transformBytesString } from "@/utils/transform";
+import { createPost } from "@/api/post";
+import { createAttachment } from "@/api/attachment";
 
 export default defineComponent({
   components: {
@@ -49,6 +81,9 @@ export default defineComponent({
     SelectOutlined,
     LeftOutlined,
     DownloadOutlined,
+    QuestionCircleOutlined,
+    CheckOutlined,
+    EditOutlined,
     Table,
   },
   setup() {
@@ -79,9 +114,9 @@ export default defineComponent({
     const totalFileCount = ref(0);
 
     const store = useStore();
-    
+
     const fileList = ref([]);
-    const fetchFileList = async() => {
+    const fetchFileList = async () => {
       try {
         // 从store中获取用户名作为bucketName
         const prefix = "/";
@@ -91,12 +126,14 @@ export default defineComponent({
             if (item.isDir) {
               item.fileSize = "";
               item.lastModified = "";
+              item.key = item.prefix + item.fileName;
               if (item.children) {
                 item.children = item.children.map(mapFunction);
               }
             } else {
               item.fileSize = transformSize(item.fileSize);
               item.lastModified = transformTime(item.lastModified);
+              item.key = item.prefix + item.fileName;
             }
             return item;
           };
@@ -112,7 +149,7 @@ export default defineComponent({
       }
     }
 
-    const searchFileList = async() => {
+    const searchFileList = async () => {
       try {
         // 从store中获取用户名作为bucketName
         const prefix = "/";
@@ -129,18 +166,7 @@ export default defineComponent({
       message.success("刷新成功");
     };
 
-    const handleUpload = async(file) => {
-      try {
-        uploadFile(username.value, file).then((res) => {
-          message.success("上传成功");
-          fetchFileList();
-        });
-      } catch (error) {
-        console.log(error);
-      }
-    }
-
-    const handleDelete = async(objectName) => {
+    const handleDelete = async (objectName) => {
       try {
         // 从store中获取用户名作为bucketName
         const bucketName = store.getters.username;
@@ -163,22 +189,88 @@ export default defineComponent({
         console.log(error);
       }
     }
-    
+
     const username = computed(() => store.getters.username);
 
-    
+    const keyword = ref("");
+
+    const prefix = ref("/");
+    const oldObjectName = ref("");
+    const newObjectName = ref("");
+    const showFileRenameModal = ref(false);
+    const showDirectoryRenameModal = ref(false);
+
+    const handleFileRename = async () => {
+      // 访问接口，修改文件名
+      oldObjectName.value = prefix.value + oldObjectName.value;
+      newObjectName.value = prefix.value + newObjectName.value;
+      const response = await renameFile(username.value, oldObjectName.value, newObjectName.value);
+      if (response.data === "重命名成功") {
+        message.success("修改成功");
+        fetchFileList();
+      } else {
+        message.error("修改失败");
+      }
+      showFileRenameModal.value = false;
+      oldObjectName.value = "";
+      newObjectName.value = "";
+    }
+
+    const handleDirectoryRename = async () => {
+      oldObjectName.value = prefix.value + oldObjectName.value;
+      newObjectName.value = prefix.value + newObjectName.value;
+      const response = await renameDir(username.value, oldObjectName.value, newObjectName.value);
+      if (response.data === "重命名成功") {
+        message.success("修改成功");
+        fetchFileList();
+      } else {
+        message.error("修改失败");
+      }
+      showDirectoryRenameModal.value = false;
+      oldObjectName.value = "";
+      newObjectName.value = "";
+    }
+
     const state = reactive({
       selectedRowKeys: [],
+      selectedRowProperties: [],
       loading: false,
-    });
-
+    })
     const hasSelected = computed(() => state.selectedRowKeys.length > 0);
-
-    const handleSelectChange = (selectedRowKeys) => {
+    const onSelectChange = (selectedRowKeys, selectedRows) => {
+      // 清空state.selectedRowProperties
+      state.selectedRowProperties = [];
       state.selectedRowKeys = selectedRowKeys;
+      for (let i = 0; i < selectedRows.length; i++) {
+        const row = selectedRows[i];
+        state.selectedRowProperties.push({
+          "fileName": row.fileName,
+          "fileSize": transformBytesString(row.fileSize),
+          "fileType": "object",
+          "fileUrl": row.url,
+        })
+      }
     };
 
-    const keyword = ref("");
+    const userId = computed(() => store.getters.userId);
+
+    const handleUpload = async () => {
+      state.loading = true;
+      const response = await createPost('文件分享', '', userId.value);
+
+      // 创建附件
+      const postId = response.data.id;
+      for (let i = 0; i < state.selectedRowProperties.length; i++) {
+        const property = state.selectedRowProperties[i];
+        const fileName = property.fileName;
+        const fileSize = property.fileSize;
+        const fileType = property.fileType;
+        const fileUrl = property.fileUrl;
+        createAttachment(postId, fileName, fileSize, fileType, fileUrl);
+      }
+      state.loading = false;
+      message.success('上传成功');
+    }
 
     return {
       totalFileCount,
@@ -192,9 +284,17 @@ export default defineComponent({
       searchFileList,
       handleUpload,
       handleDelete,
-      ...toRefs(state),
+      showFileRenameModal,
+      showDirectoryRenameModal,
+      prefix,
+      oldObjectName,
+      newObjectName,
+      handleFileRename,
+      handleDirectoryRename,
       hasSelected,
-      handleSelectChange,
+      ...toRefs(state),
+      onSelectChange,
+      userId,
     };
   },
   created() {
@@ -207,6 +307,7 @@ export default defineComponent({
 .breadcrumb-wrapper {
   margin-bottom: 16px;
 }
+
 .file-manager-page {
   margin-top: 72px;
   background-color: #f5f5f5;
@@ -323,4 +424,46 @@ export default defineComponent({
   border-style: solid;
   padding: 0px 25px;
 }
-</style>
+
+.editable-cell {
+  position: relative;
+}
+
+.editable-cell .editable-cell-input-wrapper,
+.editable-cell .editable-cell-text-wrapper {
+  padding-right: 24px;
+}
+
+.editable-cell .editable-cell-text-wrapper {
+  padding: 5px 24px 5px 5px;
+}
+
+.editable-cell .editable-cell-icon,
+.editable-cell .editable-cell-icon-check {
+  position: absolute;
+  right: 0;
+  width: 20px;
+  cursor: pointer;
+}
+
+.editable-cell .editable-cell-icon {
+  margin-top: 4px;
+  display: none;
+}
+
+.editable-cell .editable-cell-icon-check {
+  line-height: 28px;
+}
+
+.editable-cell .editable-cell-icon:hover,
+.editable-cell .editable-cell-icon-check:hover {
+  color: #108ee9;
+}
+
+.editable-cell .editable-add-btn {
+  margin-bottom: 8px;
+}
+
+.editable-cell:hover .editable-cell-icon {
+  display: inline-block;
+}</style>

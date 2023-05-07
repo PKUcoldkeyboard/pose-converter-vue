@@ -60,3 +60,27 @@ export function getMetaData(bucketName) {
         }
     })
 }
+
+export function renameFile(bucketName, oldName, newName) {
+    return api({
+        url: "/file/rename",
+        method: "put",
+        params: {
+            bucketName: bucketName,
+            oldName: oldName,
+            newName: newName
+        }
+    })
+}
+
+export function renameDir(bucketName, oldName, newName) {
+    return api({
+        url: "/file/rename/dir",
+        method: "put",
+        params: {
+            bucketName: bucketName,
+            oldName: oldName,
+            newName: newName
+        }
+    })
+}

@@ -155,7 +155,22 @@ export default defineComponent({
         // 从store中获取用户名作为bucketName
         const prefix = "/";
         searchFiles(username.value, prefix, keyword.value).then((res) => {
-
+          const mapFunction = (item) => {
+            if (item.isDir) {
+              item.fileSize = "";
+              item.lastModified = "";
+              item.key = item.prefix + item.fileName;
+              if (item.children) {
+                item.children = item.children.map(mapFunction);
+              }
+            } else {
+              item.fileSize = transformSize(item.fileSize);
+              item.lastModified = transformTime(item.lastModified);
+              item.key = item.prefix + item.fileName;
+            }
+            return item;
+          };
+          fileList.value = res.data.map(mapFunction);
         });
       } catch (error) {
         console.log(error);
@@ -254,12 +269,23 @@ export default defineComponent({
       state.selectedRowKeys = selectedRowKeys;
       for (let i = 0; i < selectedRows.length; i++) {
         const row = selectedRows[i];
-        state.selectedRowProperties.push({
-          "fileName": row.fileName,
-          "fileSize": transformBytesString(row.fileSize),
-          "fileType": "object",
-          "fileUrl": row.url,
-        })
+        if (row.isDir) {
+          const prefix = row.prefix + row.fileName;
+          // 如果是目录，则打包成zip文件
+          state.selectedRowProperties.push({
+            "fileName": row.fileName + ".zip",
+            "fileSize": 0,
+            "fileType": "dir",
+            "fileUrl": `http://localhost:8058/api/file/download/zip?bucketName=${username.value}&prefix=${prefix}`,
+          })
+        } else {
+          state.selectedRowProperties.push({
+            "fileName": row.fileName,
+            "fileSize": transformBytesString(row.fileSize),
+            "fileType": "object",
+            "fileUrl": row.url,
+          })
+        }
       }
     };
 

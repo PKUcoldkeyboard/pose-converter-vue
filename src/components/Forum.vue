@@ -3,21 +3,31 @@
     <div class="container">
       <div class="forum-header">
         <h1 class="forum-title">论坛</h1>
-        <button class="create-post-button" @click="showCreatePostModal = true">创建新帖子</button>
+        <div class="button-container">
+          <button v-if="myPostFlag" class="my-post-button" @click="handleGetMyPosts">我的帖子</button>
+          <button v-else class="my-post-button" @click="handleGetAllPosts">所有帖子</button>
+          <button class="create-post-button" @click="showCreatePostModal = true">创建新帖子</button>
+        </div>
       </div>
       <div>
         <a-card v-for="(post, index) in posts" :key="index" class="post-card">
           <!--作者用户名-->
           <h1>{{ post.title }}</h1>
-          <a-card-meta :title="`发帖人：` + getUsersById(post.userId).username" :description="formatDate(post.createTime)"></a-card-meta>
+          <a-card-meta :title="`发帖人：` + getUsersById(post.userId).username"
+            :description="formatDate(post.createTime)"></a-card-meta>
           <div class="post-content">{{ post.content }}</div>
+          <button v-if="!myPostFlag" class="delete-button" @click="handleDeletePost(post.id)">删除</button>
 
           <!-- 显示附件列表 -->
           <!-- 列表标题 -->
           <a-divider orientation="left" style="border-color: black" dashed>附件</a-divider>
           <a-list v-if="post.attachments && post.attachments.length" class="attachment-list">
             <a-list-item v-for="(attachment, index) in post.attachments" :key="index">
-              <a :href="attachment.fileUrl" target="_blank">
+              <a v-if="attachment.fileType === 'dir'" @click.prevent="handleDownloadZip(attachment)" href="#"
+                target="_blank">
+                {{ attachment.fileName }}
+              </a>
+              <a v-else :href="attachment.fileUrl" target="_blank">
                 {{ attachment.fileName }} ({{ attachment.fileSize }})
               </a>
             </a-list-item>
@@ -33,8 +43,8 @@
             </template>
           </a-list>
           <!-- 添加回复按钮 -->
-          <a-button @click="showReplyModal=true; replyPostId=post.id" class="reply-button">回复</a-button>
-          <a-modal title="回复帖子" :visible="showReplyModal" @ok="handleReplyClick" @cancel="showReplyModal=false">
+          <a-button @click="showReplyModal = true; replyPostId = post.id" class="reply-button">回复</a-button>
+          <a-modal title="回复帖子" :visible="showReplyModal" @ok="handleReplyClick" @cancel="showReplyModal = false">
             <a-form>
               <a-form-item label="内容">
                 <a-textarea v-model:value="replyContent" placeholder="请输入回复内容"></a-textarea>
@@ -42,14 +52,10 @@
             </a-form>
           </a-modal>
         </a-card>
-        <a-pagination
-          :current="currentPage"
-          :total="posts.length"
-          :pageSize="10"
-          @change="handlePageChange"
-          class="pagination"
-        ></a-pagination>
-        <a-modal title="创建新帖子" :visible="showCreatePostModal" @ok="handleCreatePost" @cancel="showCreatePostModal = false">
+        <a-pagination :current="currentPage" :total="totalItems" :pageSize="pageSize" @change="handlePageChange"
+          class="pagination"></a-pagination>
+        <a-modal title="创建新帖子" :visible="showCreatePostModal" @ok="handleCreatePost"
+          @cancel="showCreatePostModal = false">
           <a-form>
             <a-form-item label="标题">
               <a-input v-model:value="newPostTitle" placeholder="请输入帖子标题"></a-input>
@@ -59,11 +65,10 @@
             </a-form-item>
           </a-form>
           <div class="file-upload">
-          <a-upload :showUploadList="true"
-                    :before-upload="validateFile">
-            <a-button><upload-outlined />添加附件</a-button>
-          </a-upload>
-        </div>
+            <a-upload :showUploadList="true" :before-upload="validateFile">
+              <a-button><upload-outlined />添加附件</a-button>
+            </a-upload>
+          </div>
         </a-modal>
       </div>
     </div>
@@ -74,21 +79,24 @@
 import { computed, defineComponent, ref } from 'vue';
 import { useStore } from 'vuex';
 import { createComment, getComments, getCommentsByPostId } from '@/api/comment';
-import { createPost, getPostList } from '@/api/post';
+import { createPost, deletePost, getPostList, getPostListByUserId } from '@/api/post';
 import { transformTime, transformSize } from '@/utils/transform';
 import { getUserList } from '@/api/user';
 import { Modal, message } from 'ant-design-vue';
-import { uploadFile } from '@/api/minio';
-import { createAttachment, getAttachmentsByPostId } from '@/api/attachment';
+import { downloadZip, uploadFile } from '@/api/minio';
+import { UploadOutlined } from '@ant-design/icons-vue';
+import { createAttachment, getAttachmentsByPostId, getAttachmentsByPostIds } from '@/api/attachment';
 
 export default defineComponent({
+  components: {
+    UploadOutlined,
+  },
   setup() {
     const store = useStore();
     const userId = computed(() => store.getters.userId);
     const posts = ref([]);
     const comments = ref([]);
     const users = ref([]);
-    const currentPage = ref(1);
     const showCreatePostModal = ref(false);
     const showReplyModal = ref(false);
     const newPostTitle = ref('');
@@ -96,7 +104,9 @@ export default defineComponent({
     const replyContent = ref('');
     const replyPostId = ref('');
     const fileList = ref([]);
-
+    const currentPage = ref(1);
+    const totalItems = ref(0);
+    const pageSize = ref(10);
 
     const fetchComments = async (postId) => {
       const response = await getComments();
@@ -104,16 +114,63 @@ export default defineComponent({
     };
 
     const fetchPosts = async () => {
-      const response = await getPostList(currentPage.value, 10);
-      posts.value = response.data;
+      try {
+        const response = await getPostList(currentPage.value, 10);
+        posts.value = response.data.records
+        totalItems.value = response.data.total;
 
-      for (let i = 0; i < posts.value.length; i++) {
-        const post = posts.value[i];
-        const response2 = await getAttachmentsByPostId(post.id)
-        posts.value[i].attachments = response2.data;
-        for (let j = 0; j < response2.data.length; j++) {
-          posts.value[i].attachments[j].fileSize = transformSize(posts.value[i].attachments[j].fileSize);
+        
+        let postIds = [];
+        for (let i = 0; i < posts.value.length; i++) {
+          const post = posts.value[i];
+          postIds.push(post.id);
+          // const response2 = await getAttachmentsByPostId(post.id);
+          // posts.value[i].attachments = response2.data;
+          // for (let j = 0; j < response2.data.length; j++) {
+          //   posts.value[i].attachments[j].fileSize = transformSize(posts.value[i].attachments[j].fileSize);
+          // }
         }
+
+        const response2 = await getAttachmentsByPostIds(postIds);
+        posts.value.forEach((post) => {
+          post.attachments = response2.data.filter((attachment) => attachment.postId === post.id);
+          post.attachments.forEach((attachment) => {
+            attachment.fileSize = transformSize(attachment.fileSize);
+          });
+        });
+        
+      } catch (error) {
+        message.error(error);
+      }
+    };
+
+    const fetchPostsByUserId = async () => {
+      try {
+        const response = await getPostListByUserId(userId.value, currentPage.value, 10);
+        posts.value = response.data.records;
+        totalItems.value = response.data.total;
+
+        let postIds = [];
+        for (let i = 0; i < posts.value.length; i++) {
+          const post = posts.value[i];
+          postIds.push(post.id);
+          // const response2 = await getAttachmentsByPostId(post.id);
+          // posts.value[i].attachments = response2.data;
+          // for (let j = 0; j < response2.data.length; j++) {
+          //   posts.value[i].attachments[j].fileSize = transformSize(posts.value[i].attachments[j].fileSize);
+          // }
+        }
+
+        const response2 = await getAttachmentsByPostIds(postIds);
+        posts.value.forEach((post) => {
+          post.attachments = response2.data.filter((attachment) => attachment.postId === post.id);
+          post.attachments.forEach((attachment) => {
+            attachment.fileSize = transformSize(attachment.fileSize);
+          });
+        });
+
+      } catch (error) {
+        message.error(error);
       }
     };
 
@@ -125,12 +182,13 @@ export default defineComponent({
 
     const paginatedPosts = computed(() => {
       const start = (currentPage.value - 1) * 10;
-      const end =  start + 10;
+      const end = start + 10;
       return posts.value.slice(start, end);
     });
 
     const handlePageChange = (page) => {
       currentPage.value = page;
+      fetchPosts();
     };
 
     // 调用 transformTime 函数，将时间戳转换为日期字符串
@@ -176,6 +234,7 @@ export default defineComponent({
       fetchPosts();
       fetchUsers();
       fetchComments();
+      myPostFlag.value = false;
       message.success('创建成功');
     };
 
@@ -202,6 +261,49 @@ export default defineComponent({
 
     const username = computed(() => store.getters.username);
 
+    const handleDownloadZip = async (attachment) => {
+      // 根据,切割fileUrl得到bucketName和objectName
+      const fileUrl = attachment.fileUrl;
+      const arr = fileUrl.split('&');
+      const bucketName = arr[0];
+      const prefix = arr[1];
+      const response = await downloadZip(bucketName, prefix);
+      const blob = new Blob([response.data], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', attachment.fileName);
+
+      // 将 <a> 标签插入到 DOM 中，触发点击事件以开始下载，然后将其从 DOM 中移除
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // 释放 URL 对象
+      window.URL.revokeObjectURL(url);
+    }
+
+    const handleGetMyPosts = () => {
+      fetchPostsByUserId();
+      myPostFlag.value = false;
+    }
+
+    const handleGetAllPosts = () => {
+      fetchPosts();
+      myPostFlag.value = true;
+    }
+
+    const myPostFlag = ref(true);
+
+    const handleDeletePost = (postId) => {
+      deletePost(postId).then(() => {
+        fetchPostsByUserId();
+        message.success('删除成功');
+      }).catch(() => {
+        message.error('删除失败');
+      });
+    };
+
     return {
       userId,
       posts,
@@ -227,6 +329,14 @@ export default defineComponent({
       replyContent,
       replyPostId,
       validateFile,
+      totalItems,
+      pageSize,
+      handleDownloadZip,
+      fetchPostsByUserId,
+      handleGetMyPosts,
+      myPostFlag,
+      handleDeletePost,
+      handleGetAllPosts
     }
   },
   created() {
@@ -271,6 +381,26 @@ export default defineComponent({
   font-size: 16px;
   cursor: pointer;
 }
+
+.button-container {
+  display: flex;
+  gap: 8px;
+}
+
+.my-post-button {
+  background-color: #fff;
+  color: #0084ff;
+  border: 1px solid #0084ff;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.my-post-button:hover {
+  background-color: #e6f7ff;
+}
+
 
 .forum-content {
   background-color: #fff;
@@ -378,13 +508,29 @@ export default defineComponent({
 }
 
 .file-upload {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background-color: #fff;
-    padding: 24px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background-color: #fff;
+  padding: 24px;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+.delete-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: #ff4d4f;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.delete-button:hover {
+  background-color: #ff7875;
+}
 </style>

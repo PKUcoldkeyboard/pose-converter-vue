@@ -1,5 +1,4 @@
 import { login } from "@/api/login";
-import { removeToken, setToken } from "@/utils/auth";
 import { createStore } from "vuex";
 
 const store = createStore({
@@ -48,6 +47,9 @@ const store = createStore({
           commit('SET_TOKEN', '');
           commit('SET_USERNAME', '');
           commit('SET_USER_ID', '');
+          localStorage.removeItem('token');
+          localStorage.removeItem('username');
+          localStorage.removeItem('userId');
           resolve();
       })
     },

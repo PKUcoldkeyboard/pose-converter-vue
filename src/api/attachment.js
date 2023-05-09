@@ -14,6 +14,16 @@ export function getAttachmentsByPostId(id) {
     })
 }
 
+export function getAttachmentsByPostIds(ids) {
+    return api({
+        url: "/attachment/posts/",
+        method: "post",
+        data: {
+            postIds: ids
+        }
+    })
+}
+
 export function createAttachment(postId, fileName, fileSize, fileType, fileUrl) {
     return api.post("/attachment/", {
         "postId": postId,

@@ -18,6 +18,17 @@ export function getPostList(page, size) {
     });
 }
 
+export function getPostListByUserId(userId, page, size) {
+    return api({
+        url: "/post/user/" + userId,
+        method: "get",
+        params: {
+            "pageNum": page,
+            "pageSize": size
+        },
+    });
+}
+
 export function createPost(title, content, userId) {
     return api({
         url: "/post/",

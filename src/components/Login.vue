@@ -108,11 +108,11 @@ export default defineComponent({
       store.dispatch('Login', payload).then(()=> {
         formState.loading = false;
         if (formState.rememberMe) {
-          localStorage.setItem("username", formState.username);
-          localStorage.setItem("password", formState.password);
+          localStorage.setItem("rem:username", formState.username);
+          localStorage.setItem("rem:password", formState.password);
         } else {
-          localStorage.removeItem("username");
-          localStorage.removeItem("password");
+          localStorage.removeItem("rem:username");
+          localStorage.removeItem("rem:password");
         }
         router.push('/video-to-3d');
       }).catch((error) => {
@@ -127,11 +127,11 @@ export default defineComponent({
 
     const goToRegister = () => {
       if (formState.rememberMe) {
-          localStorage.setItem("username", formState.username);
-          localStorage.setItem("password", formState.password);
+          localStorage.setItem("rem:username", formState.username);
+          localStorage.setItem("rem:password", formState.password);
       } else {
-          localStorage.removeItem("username");
-          localStorage.removeItem("password");
+          localStorage.removeItem("rem:username");
+          localStorage.removeItem("rem:password");
       }
       router.push('/register')
     }
@@ -147,8 +147,8 @@ export default defineComponent({
   },
 
   created() {
-    const username = localStorage.getItem('username');
-    const password = localStorage.getItem('password');
+    const username = localStorage.getItem('rem:username');
+    const password = localStorage.getItem('rem:password');
 
     if (username) {
       this.formState.username = username;

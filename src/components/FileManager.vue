@@ -33,8 +33,9 @@
               <a v-else-if="record.isDir"
                 @click="showDirectoryRenameModal = true; prefix = record.prefix; oldObjectName = record.fileName;"><edit-outlined />重命名</a>
 
-              <a style="margin-left: 8px;" v-if="!record.isDir" :href="record.url" download><download-outlined />下载</a>
-              <a-popconfirm v-if="!record.isDir" @confirm="handleDelete(record.fileName)" title="确认删除?">
+              <a v-if="record.isDir" @click.prevent="handleDownloadZip(record)" style="margin-left: 8px;" href="#" target="_blank"><download-outlined />下载</a>
+              <a v-else-if="!record.isDir" style="margin-left: 8px;" :href="record.url" target="_blank" download><download-outlined />下载</a>
+              <a-popconfirm @confirm="handleDelete(record)" title="确认删除?">
                 <template #icon><question-circle-outlined style="color: red" /></template>
                 <a style="color:red; margin-left: 8px;">删除</a>
               </a-popconfirm>
@@ -69,7 +70,7 @@ import {
 } from "@ant-design/icons-vue";
 import { Modal, Table, message } from "ant-design-vue";
 import { useStore } from "vuex";
-import { deleteFile, getMetaData, listFile, renameDir, renameFile, searchFiles } from "@/api/minio";
+import { deleteDir, deleteFile, downloadZip, getMetaData, listFile, renameDir, renameFile, searchFiles } from "@/api/minio";
 import { transformSize, transformTime, transformBytesString } from "@/utils/transform";
 import { createPost } from "@/api/post";
 import { createAttachment } from "@/api/attachment";
@@ -166,17 +167,27 @@ export default defineComponent({
       message.success("刷新成功");
     };
 
-    const handleDelete = async (objectName) => {
+    const handleDelete = async (record) => {
       try {
         // 从store中获取用户名作为bucketName
         const bucketName = store.getters.username;
+        const title = record.isDir ? "删除目录" : "删除文件";
+        const content = record.isDir ? "确定删除该目录吗？" : "确定删除该文件吗？";
         Modal.confirm({
-          title: "删除文件",
-          content: "确定删除该文件吗？",
+          title: title,
+          content: content,
           okText: "确定",
           cancelText: "取消",
           onOk() {
-            deleteFile(bucketName, objectName).then((res) => {
+            if (record.isDir) {
+              deleteDir(bucketName, record.fileName).then((res) => {
+                message.success("删除目录成功");
+                fetchFileList();
+              });
+              return;
+            }
+
+            deleteFile(bucketName, record.fileName).then((res) => {
               message.success("删除成功");
               fetchFileList();
             });
@@ -272,6 +283,24 @@ export default defineComponent({
       message.success('上传成功');
     }
 
+    const handleDownloadZip = async (record) => {
+      const prefix = record.prefix + record.fileName;
+      const response = await downloadZip(username.value, prefix);
+      const blob = new Blob([response.data], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', record.fileName + '.zip');
+
+      // 将 <a> 标签插入到 DOM 中，触发点击事件以开始下载，然后将其从 DOM 中移除
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // 释放 URL 对象
+      window.URL.revokeObjectURL(url);
+    }
+
     return {
       totalFileCount,
       totalFileSize,
@@ -295,6 +324,7 @@ export default defineComponent({
       ...toRefs(state),
       onSelectChange,
       userId,
+      handleDownloadZip,
     };
   },
   created() {

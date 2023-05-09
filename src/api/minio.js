@@ -1,4 +1,5 @@
 import api from "@/utils/request";
+import axios from "axios";
 
 export function uploadFile(bucketName, file) {
     const formData = new FormData();
@@ -81,6 +82,27 @@ export function renameDir(bucketName, oldName, newName) {
             bucketName: bucketName,
             oldName: oldName,
             newName: newName
+        }
+    })
+}
+
+export function deleteDir(bucketName, dirName) {
+    return api({
+        url: "/file/delete/dir",
+        method: "delete",
+        params: {
+            bucketName: bucketName,
+            prefix: dirName
+        }
+    })
+}
+
+export function downloadZip(bucketName, prefix) {
+    const downloadUrl = `http://localhost:8058/api/file/download/zip?bucketName=${bucketName}&prefix=${prefix}`;
+    return axios.get(downloadUrl, {
+        responseType: 'blob',
+        headers: {
+            'sa-token': localStorage.getItem('token') || ''
         }
     })
 }

@@ -39,6 +39,7 @@
                 <a-comment :author="getUsersById(comment.userId).username" :content="comment.content"
                   :datetime="formatDate(comment.createTime)">
                 </a-comment>
+                <a-button v-if="isMe(comment.userId)" @click="handleDeleteComment(comment.id)" type="primary" style="margin-left:16px;" class="reply-button" danger>删除</a-button>
               </a-list-item>
             </template>
           </a-list>
@@ -55,7 +56,7 @@
         <a-pagination :current="currentPage" :total="totalItems" :pageSize="pageSize" @change="handlePageChange"
           class="pagination"></a-pagination>
         <a-modal title="创建新帖子" :visible="showCreatePostModal" @ok="handleCreatePost"
-          @cancel="showCreatePostModal = false">
+          @cancel="handleCancelCreatePost">
           <a-form>
             <a-form-item label="标题">
               <a-input v-model:value="newPostTitle" placeholder="请输入帖子标题"></a-input>
@@ -65,7 +66,7 @@
             </a-form-item>
           </a-form>
           <div class="file-upload">
-            <a-upload :showUploadList="true" :before-upload="validateFile">
+            <a-upload v-model:file-list="uploadRef" :showUploadList="true" :before-upload="validateFile">
               <a-button><upload-outlined />添加附件</a-button>
             </a-upload>
           </div>
@@ -86,6 +87,7 @@ import { Modal, message } from 'ant-design-vue';
 import { downloadZip, uploadFile } from '@/api/minio';
 import { UploadOutlined } from '@ant-design/icons-vue';
 import { createAttachment, getAttachmentsByPostId, getAttachmentsByPostIds } from '@/api/attachment';
+import { deleteComment } from '@/api/comment';
 
 export default defineComponent({
   components: {
@@ -131,6 +133,9 @@ export default defineComponent({
           // }
         }
 
+	  if (postIds.length == 0) {
+	  	return;
+	  }
         const response2 = await getAttachmentsByPostIds(postIds);
         posts.value.forEach((post) => {
           post.attachments = response2.data.filter((attachment) => attachment.postId === post.id);
@@ -151,6 +156,7 @@ export default defineComponent({
         totalItems.value = response.data.total;
 
         let postIds = [];
+
         for (let i = 0; i < posts.value.length; i++) {
           const post = posts.value[i];
           postIds.push(post.id);
@@ -160,6 +166,10 @@ export default defineComponent({
           //   posts.value[i].attachments[j].fileSize = transformSize(posts.value[i].attachments[j].fileSize);
           // }
         }
+	 
+        if (postIds.length == 0) {
+	  	return;
+	  }
 
         const response2 = await getAttachmentsByPostIds(postIds);
         posts.value.forEach((post) => {
@@ -199,52 +209,54 @@ export default defineComponent({
     };
 
     const getUsersById = (userId) => {
-      return users.value.find((user) => user.id === userId);
+	const user = users.value.find((user) => user.id === userId);
+      return user || { username: '未知用户' };
     };
 
     const handleCreatePost = async () => {
       const response = await createPost(newPostTitle.value, newPostContent.value, userId.value);
-      posts.value.push(response.data);
+      // posts.value.push(response.data);
       showCreatePostModal.value = false;
       newPostTitle.value = '';
       newPostContent.value = '';
 
-      // 创建附件
-      const postId = response.data.id;
-      // 遍历 fileList，上传每个文件
-      fileList.value.forEach(async (file) => {
-        let url = '';
-        try {
-          const response = await uploadFile(username.value, file);
-          url = response.data;
-          message.success("上传成功");
-        } catch (error) {
-          console.log(error);
-          message.error("上传失败");
-        }
+// 创建附件
+const postId = response.data.id;
+// 遍历 fileList，上传每个文件
+const attachmentPromises = fileList.value.map(async (file) => {
+  let url = '';
+  try {
+    const response = await uploadFile(username.value, file);
+    url = response.data;
+    message.success("上传成功");
+  } catch (error) {
+    console.log(error);
+    message.error("上传失败");
+  }
 
-        try {
-          const response = await createAttachment(postId, file.name, file.size, 'object', url);
-          message.success("创建附件成功");
-        } catch (error) {
-          console.log(error);
-          message.error("创建附件失败");
-        }
-      });
-      fetchPosts();
-      fetchUsers();
-      fetchComments();
-      myPostFlag.value = false;
+  try {
+    const response = await createAttachment(postId, file.name, file.size, 'object', url);
+    message.success("创建附件成功");
+  } catch (error) {
+    console.log(error);
+    message.error("创建附件失败");
+  }
+});
+
+// 等待所有附件创建完成
+await Promise.all(attachmentPromises);
+
+if (myPostFlag.value) {
+  handleGetAllPosts();
+} else {
+  handleGetMyPosts();
+}
+	
       message.success('创建成功');
     };
 
     const validateFile = (file) => {
-      // 限制 mp4、png、blender 三种格式的文件
-      const fileType = file.type;
-      if (fileType !== "video/mp4" && fileType !== "image/png" && fileType !== "application/x-blender") {
-        message.error("只能上传 mp4、png、blender 三种格式的文件");
-        return false;
-      }
+
       fileList.value.push(file);
 
       return false;
@@ -285,11 +297,15 @@ export default defineComponent({
 
     const handleGetMyPosts = () => {
       fetchPostsByUserId();
+	fetchUsers();
+	fetchComments();
       myPostFlag.value = false;
     }
 
     const handleGetAllPosts = () => {
       fetchPosts();
+	fetchUsers();
+	fetchComments();
       myPostFlag.value = true;
     }
 
@@ -303,8 +319,29 @@ export default defineComponent({
         message.error('删除失败');
       });
     };
+    
+    const uploadRef = ref(null);
+    const handleCancelCreatePost = () => {
+    	showCreatePostModal.value = false;
+      uploadRef.value = null;
+	  fileList.value = [];
+    }
+
+    const isMe = (id) => {
+        return id == userId.value;
+    }
+
+    const handleDeleteComment = (id) => {
+        deleteComment(id).then( () => {
+          message.success("删除成功");
+        }).catch(err => {
+          message.error("删除失败");
+        });
+    }
 
     return {
+      handleDeleteComment,
+      isMe,
       userId,
       posts,
       comments,
@@ -336,13 +373,13 @@ export default defineComponent({
       handleGetMyPosts,
       myPostFlag,
       handleDeletePost,
-      handleGetAllPosts
+      handleGetAllPosts,
+      handleCancelCreatePost,
+	uploadRef,
     }
   },
   created() {
-    this.fetchPosts();
-    this.fetchComments();
-    this.fetchUsers();
+    this.handleGetAllPosts();
   },
 });
 </script>

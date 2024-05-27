@@ -5,11 +5,11 @@
 - 安装必须的包，在根目录执行
 
 ```
-cnpm install
+npm install
 ```
 
 - 启动项目
 
 ```
-cnpm run dev
+npm run dev
 ```
